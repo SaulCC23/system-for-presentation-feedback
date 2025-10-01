@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Pantalla de Inicio</title>
+  <link rel="stylesheet" href="style.css" />
+  <style>
+    .password-wrapper {
+      position: relative;
+      display: flex;
+      align-items: center;
+    }
+    .password-wrapper input {
+      width: 100%;
+      padding-right: 40px;
+    }
+    .toggle-password {
+      position: absolute;
+      right: 10px;
+      cursor: pointer;
+      user-select: none;
+      font-size: 14px;
+      color: #666;
+    }
+  </style>
+</head>
+<body>
+  <div class="overlay"></div>
+  <div class="login-container">
+    <img src="imagenes/logo.png" alt="Logo" class="logo">
+
+    <div class="forms">
+      <!-- Profesores -->
+      <div class="form-box">
+        <h2>Profesores/Presentadores</h2>
+        <input id="loginEmail" type="email" placeholder="Correo Institucional | Matricula@merida.tecnm.mx" required>
+
+        <div class="password-wrapper">
+          <input id="loginPassword" type="password" placeholder="Contraseña" required>
+          <span id="toggleLoginPassword" class="toggle-password">ver</span>
+        </div>
+
+        <button id="loginBtn" class="btn-grad">INICIAR SESIÓN</button>
+        <a href="register.html" class="register-link">Registrarse</a>
+         <a href="recuperacion.html" class="register-link">¿Olvidaste tu contraseña?</a>
+      </div>
+
+      <!-- Estudiantes -->
+      <div class="form-box">
+        <h2>Estudiantes/Asistentes</h2>
+        <input id="sessionCode" type="text" placeholder="Código de Sesión">
+        <button id="anonBtn" class="btn-grad">ENTRAR DE FORMA ANÓNIMA</button>
+        <p class="info">No necesitas cuenta.</p>
+      </div>
+    </div>
+  </div>
+
+<script>
+// Toggle seguro (solo visible mientras se presiona)
+const toggleLoginPassword = document.getElementById('toggleLoginPassword');
+const loginPasswordInput = document.getElementById('loginPassword');
+
+toggleLoginPassword.addEventListener('mousedown', () => {
+  loginPasswordInput.setAttribute('type', 'text');
+  toggleLoginPassword.textContent = 'ocultar';
+});
+
+toggleLoginPassword.addEventListener('mouseup', () => {
+  loginPasswordInput.setAttribute('type', 'password');
+  toggleLoginPassword.textContent = 'ver';
+});
+
+toggleLoginPassword.addEventListener('mouseleave', () => {
+  loginPasswordInput.setAttribute('type', 'password');
+  toggleLoginPassword.textContent = 'ver';
+});
+
+loginPasswordInput.addEventListener('blur', () => {
+  loginPasswordInput.setAttribute('type', 'password');
+  toggleLoginPassword.textContent = 'ver';
+});
+
+// Login normal
+document.getElementById('loginBtn').addEventListener('click', async () => {
+  const correo = document.getElementById('loginEmail').value.trim();
+  const password = loginPasswordInput.value;
+
+  let errores = [];
+
+  if (!correo) errores.push("Ingresa tu correo institucional");
+  if (!password) errores.push("Ingresa tu contraseña");
+
+  if (correo && !correo.endsWith("@merida.tecnm.mx")) {
+    errores.push("El correo debe ser institucional (@merida.tecnm.mx)");
+  }
+
+  if (password && password.length < 8) {
+    errores.push("La contraseña debe tener al menos 8 caracteres");
+  }
+
+  if (errores.length > 0) {
+    return alert("Error:\n- " + errores.join("\n- "));
+  }
+
+  try {
+    const res = await fetch('http://localhost:3000/api/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ correo, password })
+    });
+
+    const data = await res.json();
+    if (res.ok) {
+      localStorage.setItem('user', JSON.stringify(data.user));
+      window.location.href = 'dashboard.html';
+    } else {
+      alert('Error: ' + data.message);
+    }
+  } catch (err) {
+    console.error(err);
+    alert('Error de conexión con el servidor');
+  }
+});
+
+// Login anónimo
+document.getElementById('anonBtn').addEventListener('click', () => {
+  const code = document.getElementById('sessionCode').value.trim();
+  if (!code) return alert('Ingresa un código de sesión.');
+
+  localStorage.setItem('anonCode', code);
+  window.location.href = 'dashboard_anon.html';
+});
+</script>
+</body>
+</html>

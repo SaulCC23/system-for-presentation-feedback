@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Institutional Registration</title>
+  <link rel="stylesheet" href="register.css" />
+  <style>
+    .password-wrapper {
+      position: relative;
+      display: flex;
+      align-items: center;
+    }
+    .password-wrapper input {
+      width: 100%;
+      padding-right: 50px;
+    }
+    .toggle-password {
+      position: absolute;
+      right: 10px;
+      cursor: pointer;
+      user-select: none;
+      font-size: 14px;
+      color: #666;
+    }
+  </style>
+</head>
+<body>
+  <div class="overlay"></div>
+  <div class="register-container">
+    <h1>REGISTRO INSTITUCIONAL</h1>
+    <h3 class="text-child">Los campos marcados con (*) son obligatorios</h3>
+
+    <form id="registerForm" class="register-form" onsubmit="return false;">
+      <div class="column">
+        <input id="firstName" type="text" placeholder="Nombres *" required>
+        <input id="institutionalEmail" type="email" placeholder="Matricula@merida.tecnm.mx *" required>
+
+        <!-- Campo contraseña -->
+        <div class="password-wrapper">
+          <input id="password" type="password" placeholder="Contraseña *(minimo 8 caracteres)" required>
+          <span id="togglePassword" class="toggle-password">ver</span>
+        </div>
+
+        <!-- Confirmar contraseña -->
+        <div class="password-wrapper">
+          <input id="confirmPassword" type="password" placeholder="Confirmar Contraseña *" required>
+          <span id="toggleConfirmPassword" class="toggle-password">ver</span>
+        </div>
+      </div>
+
+      <div class="column">
+        <input id="lastName" type="text" placeholder="Apellidos *" required>
+        <input id="recoveryEmail" type="email" placeholder="Correo de recuperación *" required>
+
+        <div class="role-toggle">
+          <label>
+            <input type="radio" name="role" value="student" checked>
+            <span>Estudiante</span>
+          </label>
+          <label>
+            <input type="radio" name="role" value="professor">
+            <span>Presentador</span>
+          </label>
+        </div>
+      </div>
+    </form>
+
+    <button id="signupBtn" class="btn-grad">SIGN UP</button>
+    <p class="login-link">¿Ya tienes cuenta? <a href="index.html">Log In</a></p>
+  </div>
+
+<script>
+const passwordRegex = /^(?=.*[A-Z])(?=.*\d).{8,}$/;
+const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+// Función para controlar mostrar/ocultar y auto-ocultar al salir
+function setupPasswordToggle(inputId, toggleId) {
+  const input = document.getElementById(inputId);
+  const toggle = document.getElementById(toggleId);
+
+  toggle.addEventListener('mousedown', () => {
+    input.setAttribute('type', 'text');
+    toggle.textContent = 'ocultar';
+  });
+
+  toggle.addEventListener('mouseup', () => {
+    input.setAttribute('type', 'password');
+    toggle.textContent = 'ver';
+  });
+
+  toggle.addEventListener('mouseleave', () => {
+    input.setAttribute('type', 'password');
+    toggle.textContent = 'ver';
+  });
+
+  input.addEventListener('blur', () => {
+    input.setAttribute('type', 'password');
+    toggle.textContent = 'ver';
+  });
+}
+
+// Setup para ambos campos
+setupPasswordToggle('password', 'togglePassword');
+setupPasswordToggle('confirmPassword', 'toggleConfirmPassword');
+
+// Evento de registro
+document.getElementById('signupBtn').addEventListener('click', async () => {
+  const firstName = document.getElementById('firstName').value.trim();
+  const lastName = document.getElementById('lastName').value.trim();
+  const institutionalEmail = document.getElementById('institutionalEmail').value.trim();
+  const recoveryEmail = document.getElementById('recoveryEmail').value.trim();
+  const password = document.getElementById('password').value;
+  const confirmPassword = document.getElementById('confirmPassword').value;
+  const role = document.querySelector('input[name="role"]:checked').value;
+
+  let errores = [];
+
+  if (!firstName) errores.push("Nombres");
+  if (!lastName) errores.push("Apellidos");
+  if (!institutionalEmail) errores.push("Correo institucional");
+  if (!recoveryEmail) errores.push("Correo de recuperación");
+  if (!password) errores.push("Contraseña");
+  if (!confirmPassword) errores.push("Confirmar contraseña");
+
+  // dominio institucional
+  if (institutionalEmail && !institutionalEmail.endsWith("@merida.tecnm.mx")) {
+    errores.push("El correo institucional debe terminar en @merida.tecnm.mx");
+  }
+
+  // correos no iguales
+  if (institutionalEmail && recoveryEmail && institutionalEmail === recoveryEmail) {
+    errores.push("El correo de recuperación no puede ser igual al institucional");
+  }
+
+  // correo recuperación válido
+  if (recoveryEmail && !emailRegex.test(recoveryEmail)) {
+    errores.push("El correo de recuperación no es válido");
+  }
+
+  // validación de contraseña
+  if (password && !passwordRegex.test(password)) {
+    errores.push("La contraseña debe tener mínimo 8 caracteres, 1 mayúscula y 1 número.");
+  }
+
+  // confirmar contraseña
+  if (password && confirmPassword && password !== confirmPassword) {
+    errores.push("Las contraseñas no coinciden.");
+  }
+
+  if (errores.length > 0) {
+    return alert("Error:\n- " + errores.join("\n- "));
+  }
+
+  try {
+    const res = await fetch('http://localhost:3000/api/register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ firstName, lastName, institutionalEmail, recoveryEmail, password, role })
+    });
+
+    const data = await res.json();
+    if (res.ok) {
+      alert('Registro exitoso');
+      window.location.href = 'index.html';
+    } else {
+      alert('Error: ' + (data.message || JSON.stringify(data)));
+    }
+  } catch (err) {
+    console.error(err);
+    alert('Error de conexión con el servidor');
+  }
+});
+</script>
+</body>
+</html>

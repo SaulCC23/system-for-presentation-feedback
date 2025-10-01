@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Vista del Espectador</title>
+  <link rel="stylesheet" href="dashboard_espectadores.css">
+</head>
+<body>
+  <div class="container">
+    
+    <div class="presentacion">
+      <h2>PRESENTACIÓN EN VIVO</h2>
+      <div class="slide">
+        
+        <video id="liveVideo" autoplay playsinline controls></video>
+      </div>
+    </div>
+
+    
+    <div class="feedback">
+      <h3>FEEDBACK EN VIVO</h3>
+      <p class="codigo">CÓDIGO DE SESIÓN: <strong>F3AA-B89C</strong></p>
+      <button class="share">🔗 Compartir código</button>
+
+     
+      <div class="reacciones">
+        <h4>REACCIONES RÁPIDAS</h4>
+        <button class="like">¡ME GUSTA!</button>
+        <button class="dislike">PODRIA MEJORAR</button>
+      </div>
+
+     
+      <div class="comentarios-rapidos">
+        <h4>COMENTARIOS RÁPIDOS</h4>
+        <button class="quick-comment">¡Gran punto!</button>
+        <button class="quick-comment">Muy clara la explicación.</button>
+        <button class="quick-comment">Me gusta el gráfico.</button>
+      </div>
+
+      
+      <div class="chat">
+        <h4>CHAT ANÓNIMO</h4>
+        <div id="chat-messages" class="chat-messages"></div>
+        <div class="chat-input">
+          <input type="text" id="chat-input" placeholder="Escribe tu comentario anónimo...">
+          <button id="send-btn">➤</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+
+    const chatMessages = document.getElementById("chat-messages");
+    const chatInput = document.getElementById("chat-input");
+    const sendBtn = document.getElementById("send-btn");
+    const quickComments = document.querySelectorAll(".quick-comment");
+
+    function addMessage(text) {
+      if (text.trim() === "") return;
+      const msg = document.createElement("p");
+      msg.textContent = text;
+      chatMessages.appendChild(msg);
+      chatMessages.scrollTop = chatMessages.scrollHeight;
+    }
+
+    sendBtn.addEventListener("click", () => {
+      addMessage(chatInput.value);
+      chatInput.value = "";
+    });
+
+    chatInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        addMessage(chatInput.value);
+        chatInput.value = "";
+      }
+    });
+
+    quickComments.forEach(btn => {
+      btn.addEventListener("click", () => {
+        addMessage(btn.textContent);
+      });
+    });
+
+
+    const videoElement = document.getElementById("liveVideo");
+
+  
+    async function initWebRTC() {
+      // 1. Crear conexión
+      const pc = new RTCPeerConnection();
+
+     
+      pc.ontrack = (event) => {
+        videoElement.srcObject = event.streams[0];
+      };
+
+
+      const offer = await fetch("/webrtc-offer").then(res => res.json());
+
+      await pc.setRemoteDescription(new RTCSessionDescription(offer));
+
+      const answer = await pc.createAnswer();
+      await pc.setLocalDescription(answer);
+
+    
+      await fetch("/webrtc-answer", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sdp: pc.localDescription })
+      });
+    }
+
+    
+    initWebRTC().catch(console.error);
+  </script>
+</body>
+</html>

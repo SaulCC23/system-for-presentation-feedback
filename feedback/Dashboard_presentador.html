@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Vista del Presentador</title>
+  <link rel="stylesheet" href="dashboard_presentador.css">
+</head>
+<body>
+  <div class="container">
+    
+    <div class="presentacion">
+      <h1>Bienvenido</h1>
+      <div class="slide">
+       
+        <video id="preview" autoplay playsinline muted></video>
+      </div>
+
+      <div class="controles">
+        <button id="start-btn"> Transmite tu camara</button>
+        <button id="stop-btn" disabled> Detener</button>
+        <button id="share-screen"> Compartir Pantalla</button>
+      </div>
+    </div>
+
+    
+    <div class="feedback">
+      <h3>HERRAMIENTAS DEL PRESENTADOR</h3>
+      <p class="codigo">CÃ“DIGO DE SESIÃ“N: <strong>F3AA-B89C</strong></p>
+      <button class="share"> Copiar cÃ³digo</button>
+
+      
+      <div class="estado">
+        <h4>ESTADO DE TRANSMISIÃ“N</h4>
+        <p id="status"> Esperando...</p>
+      </div>
+
+      
+      <div class="chat">
+        <h4>CHAT DE ESPECTADORES</h4>
+        <div id="chat-messages" class="chat-messages"></div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+
+    const video = document.getElementById("preview");
+    const startBtn = document.getElementById("start-btn");
+    const stopBtn = document.getElementById("stop-btn");
+    const shareBtn = document.getElementById("share-screen");
+    const statusEl = document.getElementById("status");
+
+    let pc, stream;
+
+    async function startStream() {
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+        video.srcObject = stream;
+
+        pc = new RTCPeerConnection();
+
+        
+        stream.getTracks().forEach(track => pc.addTrack(track, stream));
+
+        
+        const offer = await pc.createOffer();
+        await pc.setLocalDescription(offer);
+
+       
+        const answer = await fetch("/webrtc-offer", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ sdp: pc.localDescription })
+        }).then(res => res.json());
+
+        await pc.setRemoteDescription(new RTCSessionDescription(answer));
+
+        statusEl.textContent = " Transmitiendo en vivo";
+        startBtn.disabled = true;
+        stopBtn.disabled = false;
+      } catch (err) {
+        console.error(err);
+        statusEl.textContent = " Error al iniciar transmisiÃ³n";
+      }
+    }
+
+    function stopStream() {
+      if (stream) {
+        stream.getTracks().forEach(track => track.stop());
+      }
+      if (pc) {
+        pc.close();
+      }
+      statusEl.textContent = " TransmisiÃ³n detenida";
+      startBtn.disabled = false;
+      stopBtn.disabled = true;
+    }
+
+    async function shareScreen() {
+      try {
+        const screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true });
+        const screenTrack = screenStream.getVideoTracks()[0];
+
+        
+        const sender = pc.getSenders().find(s => s.track.kind === "video");
+        sender.replaceTrack(screenTrack);
+
+        video.srcObject = screenStream;
+
+        screenTrack.onended = () => {
+          
+          stream.getVideoTracks()[0].enabled = true;
+          sender.replaceTrack(stream.getVideoTracks()[0]);
+          video.srcObject = stream;
+        };
+      } catch (err) {
+        console.error("Error compartiendo pantalla:", err);
+      }
+    }
+
+    startBtn.addEventListener("click", startStream);
+    stopBtn.addEventListener("click", stopStream);
+    shareBtn.addEventListener("click", shareScreen);
+  </script>
+</body>
+</html>
