@@ -3,30 +3,108 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Modo Presentador</title>
+  <title>Modo Profesor</title>
   <link rel="stylesheet" href="dashboard_profesor.css">
+  <style>
+    .logout-btn {
+      background: #000;
+      color: #fff;
+      padding: 0.8rem 1.2rem;
+      border: none;
+      border-radius: 50px;
+      cursor: pointer;
+      font-size: 1rem;
+      font-weight: 600;
+      margin-top: 2rem;
+      transition: opacity 0.3s;
+    }
+    .logout-btn:hover {
+      opacity: 0.8;
+    }
+
+    .btn-group .btn {
+      margin: 0.5rem;
+      padding: 0.8rem 1.2rem;
+      cursor: pointer;
+      border-radius: 8px;
+      border: none;
+      font-weight: 600;
+    }
+    .btn-group .btn:hover {
+      opacity: 0.8;
+    }
+  </style>
 </head>
 <body>
   <div class="container">
-    <h1>MODO PRESENTADOR</h1>
+    <h1>MODO PROFESOR</h1>
 
     <div class="session-box">
       <p>CÓDIGO DE SESIÓN:</p>
-      <h2><span id="session-code">F34A-B89C</span></h2>
+      <h2><span id="session-code"></span></h2>
     </div>
 
-    <button class="share-btn">COMPARTIR CÓDIGO</button>
+    <button class="share-btn" id="copy-code">COMPARTIR CÓDIGO</button>
 
     <hr>
 
     <div class="controls">
       <h3>CONTROLES DE PRESENTACIÓN</h3>
       <div class="btn-group">
+        <button class="btn" id="go-presenter">MODO PRESENTADOR</button>
         <button class="btn">INICIAR NUEVA SESIÓN</button>
         <button class="btn">FINALIZAR SESIÓN</button>
         <button class="btn">SIGUIENTE DIAPOSITIVA</button>
       </div>
     </div>
+
+    <button id="logoutBtn" class="logout-btn">CERRAR SESIÓN</button>
   </div>
+
+<script>
+  // Validación de usuario
+  const user = JSON.parse(localStorage.getItem('user'));
+
+  if (!user || user.rol !== 1) {
+    alert("Acceso no autorizado");
+    window.location.href = "index.html";
+  } else {
+    console.log("Bienvenido, profesor:", user.nombre_completo);
+  }
+
+  // Generar código de sesión aleatorio
+  function generarCodigo() {
+    const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+    let code = "";
+    for (let i = 0; i < 8; i++) {
+      code += chars.charAt(Math.floor(Math.random() * chars.length));
+      if (i === 3) code += "-";
+    }
+    return code;
+  }
+
+  const sessionCode = generarCodigo();
+  document.getElementById('session-code').textContent = sessionCode;
+  localStorage.setItem('sessionCode', sessionCode);
+
+  // Copiar código
+  document.getElementById('copy-code').addEventListener('click', () => {
+    navigator.clipboard.writeText(sessionCode).then(() => {
+      alert("Código copiado: " + sessionCode);
+    });
+  });
+
+  // Redirigir a modo presentador
+  document.getElementById('go-presenter').addEventListener('click', () => {
+    window.location.href = "dashboard_presentador.html";
+  });
+
+  // Cerrar sesión
+  document.getElementById('logoutBtn').addEventListener('click', () => {
+    localStorage.removeItem('user');
+    localStorage.removeItem('sessionCode');
+    window.location.href = "index.html";
+  });
+</script>
 </body>
 </html>

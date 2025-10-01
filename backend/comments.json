@@ -1,0 +1,68 @@
+[
+  {
+    "id": 1,
+    "user": "Prueba Pruebas",
+    "message": "hsjds",
+    "timestamp": "2025-10-01T14:52:02.627Z"
+  },
+  {
+    "id": 2,
+    "user": "Prueba Pruebas",
+    "message": "uwuw",
+    "timestamp": "2025-10-01T14:52:07.454Z"
+  },
+  {
+    "id": 3,
+    "user": "Prueba Pruebas",
+    "message": "uwu",
+    "timestamp": "2025-10-01T14:52:11.319Z"
+  },
+  {
+    "id": 4,
+    "user": "Prueba Pruebas",
+    "message": "Me gusta el gráfico.",
+    "timestamp": "2025-10-01T14:55:41.633Z"
+  },
+  {
+    "id": 5,
+    "user": "Prueba Pruebas",
+    "message": "Muy clara la explicación.",
+    "timestamp": "2025-10-01T14:55:42.463Z"
+  },
+  {
+    "id": 6,
+    "user": "Prueba Pruebas",
+    "message": "¡Gran punto!",
+    "timestamp": "2025-10-01T14:55:44.081Z"
+  },
+  {
+    "id": 7,
+    "user": "Prueba Pruebas",
+    "message": "¡Gran punto!",
+    "timestamp": "2025-10-01T14:55:44.378Z"
+  },
+  {
+    "id": 8,
+    "user": "Prueba Pruebas",
+    "message": "¡Gran punto!",
+    "timestamp": "2025-10-01T14:55:44.612Z"
+  },
+  {
+    "id": 9,
+    "user": "Prueba Pruebas",
+    "message": "nfnf",
+    "timestamp": "2025-10-01T14:55:54.729Z"
+  },
+  {
+    "id": 10,
+    "user": "Yomara Euan",
+    "message": "Me gusta el gráfico.",
+    "timestamp": "2025-10-01T15:43:32.914Z"
+  },
+  {
+    "id": 11,
+    "user": "Yomara Euan",
+    "message": "Hola esto es una prueba con otro ",
+    "timestamp": "2025-10-01T15:43:47.464Z"
+  }
+]

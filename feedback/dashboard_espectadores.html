@@ -1,36 +1,70 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Vista del Espectador</title>
-  <link rel="stylesheet" href="dashboard_espectadores.css">
+  <link rel="stylesheet" href="dashboard_espectadores.css" />
+  <style>
+    .share {
+      padding: 0.6rem 1rem;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+      background-color: #2196F3;
+      color: white;
+      margin-top: 0.5rem;
+      font-weight: 600;
+    }
+    .share:hover { opacity: 0.8; }
+
+    .chat-input input {
+      width: calc(100% - 50px);
+      padding: 0.5rem;
+      font-size: 1rem;
+      border-radius: 5px;
+      border: 1px solid #ccc;
+    }
+
+    .chat-input button {
+      padding: 0.5rem;
+      margin-left: 5px;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+      background-color: #4CAF50;
+      color: white;
+      font-weight: 600;
+    }
+
+    .chat-input button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+  </style>
 </head>
 <body>
   <div class="container">
-    
     <div class="presentacion">
       <h2>PRESENTACIÓN EN VIVO</h2>
       <div class="slide">
-        
         <video id="liveVideo" autoplay playsinline controls></video>
       </div>
     </div>
 
-    
     <div class="feedback">
       <h3>FEEDBACK EN VIVO</h3>
-      <p class="codigo">CÓDIGO DE SESIÓN: <strong>F3AA-B89C</strong></p>
-      <button class="share">🔗 Compartir código</button>
+      <p class="codigo">
+        CÓDIGO DE SESIÓN: <strong id="session-code"></strong>
+      </p>
+      <button id="copy-code-btn" class="share">🔗 Compartir código</button>
 
-     
       <div class="reacciones">
         <h4>REACCIONES RÁPIDAS</h4>
         <button class="like">¡ME GUSTA!</button>
-        <button class="dislike">PODRIA MEJORAR</button>
+        <button class="dislike">PODRÍA MEJORAR</button>
       </div>
 
-     
       <div class="comentarios-rapidos">
         <h4>COMENTARIOS RÁPIDOS</h4>
         <button class="quick-comment">¡Gran punto!</button>
@@ -38,82 +72,130 @@
         <button class="quick-comment">Me gusta el gráfico.</button>
       </div>
 
-      
       <div class="chat">
-        <h4>CHAT ANÓNIMO</h4>
+        <h4>CHAT</h4>
         <div id="chat-messages" class="chat-messages"></div>
         <div class="chat-input">
-          <input type="text" id="chat-input" placeholder="Escribe tu comentario anónimo...">
-          <button id="send-btn">➤</button>
+          <input type="text" id="chat-input" placeholder="Escribe tu comentario..." disabled />
+          <button id="send-btn" disabled>➤</button>
+        </div>
+        <div id="chat-warning" style="display:none; color:red; font-size:0.9em; margin-top:5px">
+          Debes iniciar sesión para comentar.
         </div>
       </div>
     </div>
   </div>
 
-  <script>
+<script>
+  // ---------------- SESIÓN ----------------
+  const user = JSON.parse(localStorage.getItem("user"));
+  const sessionCode =
+    new URLSearchParams(window.location.search).get("code") ||
+    localStorage.getItem("sessionCode") ||
+    "N/A";
+  document.getElementById("session-code").textContent = sessionCode;
 
-    const chatMessages = document.getElementById("chat-messages");
-    const chatInput = document.getElementById("chat-input");
-    const sendBtn = document.getElementById("send-btn");
-    const quickComments = document.querySelectorAll(".quick-comment");
-
-    function addMessage(text) {
-      if (text.trim() === "") return;
-      const msg = document.createElement("p");
-      msg.textContent = text;
-      chatMessages.appendChild(msg);
-      chatMessages.scrollTop = chatMessages.scrollHeight;
-    }
-
-    sendBtn.addEventListener("click", () => {
-      addMessage(chatInput.value);
-      chatInput.value = "";
-    });
-
-    chatInput.addEventListener("keydown", (e) => {
-      if (e.key === "Enter") {
-        addMessage(chatInput.value);
-        chatInput.value = "";
-      }
-    });
-
-    quickComments.forEach(btn => {
-      btn.addEventListener("click", () => {
-        addMessage(btn.textContent);
+  // ---------------- COPIAR CÓDIGO ----------------
+  document.getElementById("copy-code-btn").addEventListener("click", () => {
+    if (!sessionCode || sessionCode === "N/A") return alert("No hay código de sesión disponible.");
+    navigator.clipboard.writeText(sessionCode)
+      .then(() => alert(`Código copiado: ${sessionCode}`))
+      .catch(err => {
+        console.error("Error copiando el código:", err);
+        alert("No se pudo copiar el código.");
       });
-    });
+  });
 
+  // ---------------- CHAT Y FEEDBACK ----------------
+  const chatInput = document.getElementById("chat-input");
+  const sendBtn = document.getElementById("send-btn");
+  const chatWarning = document.getElementById("chat-warning");
+  const quickComments = document.querySelectorAll(".quick-comment");
+  const reactions = document.querySelectorAll(".like, .dislike");
 
-    const videoElement = document.getElementById("liveVideo");
+  if (user) {
+    chatInput.disabled = false;
+    sendBtn.disabled = false;
+    quickComments.forEach(btn => btn.disabled = false);
+    reactions.forEach(btn => btn.disabled = false);
+    chatWarning.style.display = "none";
+  } else {
+    chatInput.disabled = true;
+    sendBtn.disabled = true;
+    quickComments.forEach(btn => btn.disabled = true);
+    reactions.forEach(btn => btn.disabled = true);
+    chatWarning.style.display = "block";
+  }
 
-  
-    async function initWebRTC() {
-      // 1. Crear conexión
-      const pc = new RTCPeerConnection();
+  const chatMessages = document.getElementById("chat-messages");
 
-     
-      pc.ontrack = (event) => {
-        videoElement.srcObject = event.streams[0];
-      };
+  async function loadComments() {
+    try {
+      const res = await fetch("http://localhost:3001/api/comments");
+      const comments = await res.json();
+      chatMessages.innerHTML = comments
+        .map(c => `<p><strong>${c.user.nombre_completo || c.user}:</strong> ${c.message}</p>`)
+        .join("");
+      chatMessages.scrollTop = chatMessages.scrollHeight;
+    } catch (err) {
+      console.error("Error cargando comentarios:", err);
+    }
+  }
 
+  async function sendComment(message) {
+    if (!user) return alert("Debes iniciar sesión para comentar.");
+    if (!message.trim()) return;
 
-      const offer = await fetch("/webrtc-offer").then(res => res.json());
-
-      await pc.setRemoteDescription(new RTCSessionDescription(offer));
-
-      const answer = await pc.createAnswer();
-      await pc.setLocalDescription(answer);
-
-    
-      await fetch("/webrtc-answer", {
+    try {
+      await fetch("http://localhost:3001/api/comments", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sdp: pc.localDescription })
+        body: JSON.stringify({ user, message })
       });
+      chatInput.value = "";
+      loadComments();
+    } catch (err) {
+      console.error("Error enviando comentario:", err);
     }
+  }
 
-    
-    initWebRTC().catch(console.error);
-  </script>
+  sendBtn.addEventListener("click", () => sendComment(chatInput.value));
+  chatInput.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") sendComment(chatInput.value);
+  });
+
+  quickComments.forEach(btn => {
+    btn.addEventListener("click", () => sendComment(btn.textContent));
+  });
+
+  // Recargar comentarios cada 3s
+  loadComments();
+  setInterval(loadComments, 3000);
+
+  // ---------------- VIDEO (WebRTC) ----------------
+  const videoElement = document.getElementById("liveVideo");
+
+  async function initWebRTC() {
+    const pc = new RTCPeerConnection();
+
+    pc.ontrack = (event) => {
+      videoElement.srcObject = event.streams[0];
+    };
+
+    const offer = await fetch("http://localhost:3001/webrtc-offer").then(res => res.json());
+    await pc.setRemoteDescription(new RTCSessionDescription(offer));
+
+    const answer = await pc.createAnswer();
+    await pc.setLocalDescription(answer);
+
+    await fetch("http://localhost:3001/webrtc-answer", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ sdp: pc.localDescription })
+    });
+  }
+
+  initWebRTC().catch(console.error);
+</script>
 </body>
 </html>

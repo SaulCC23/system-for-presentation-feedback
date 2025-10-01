@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Modo Alumno</title>
+  <link rel="stylesheet" href="dashboard_profesor.css">
+  <style>
+    .session-box input {
+      width: 100%;
+      padding: 0.8rem;
+      font-size: 1rem;
+      margin-top: 0.5rem;
+      border-radius: 5px;
+      border: 1px solid #ccc;
+    }
+    .btn {
+      padding: 0.8rem 1.2rem;
+      margin-top: 1rem;
+      cursor: pointer;
+      border: none;
+      border-radius: 8px;
+      font-weight: 600;
+    }
+    .btn:hover {
+      opacity: 0.8;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>MODO ALUMNO</h1>
+
+    <div class="">
+      <p>Introduce el código de sesión del profesor:</p>
+      <input type="text" id="sessionCodeInput" placeholder="Ej: 123456" />
+    </div>
+
+    <button id="join-btn" class="btn" style="background-color:#4CAF50; color:#fff;">UNIRME A LA SESIÓN</button>
+    <hr>
+    <button id="logout-btn" class="btn" style="background-color:#f44336; color:#fff;">Cerrar Sesión</button>
+  </div>
+
+<script>
+  const user = JSON.parse(localStorage.getItem('user'));
+
+  // Solo alumnos o invitados pueden acceder
+  if (user && user.rol !== 2) {
+    alert("Acceso no autorizado para esta página");
+    window.location.href = "index.html";
+  }
+
+  const joinBtn = document.getElementById("join-btn");
+  const logoutBtn = document.getElementById("logout-btn");
+
+  joinBtn.addEventListener("click", () => {
+    const code = document.getElementById("sessionCodeInput").value.trim();
+    if (!code) {
+      alert("Debes ingresar un código de sesión.");
+      return;
+    }
+
+    // Guardar el código de sesión para la sala de espectadores
+    localStorage.setItem("sessionCode", code);
+
+    // Redirigir a la sala de espectadores con el código como query param
+    window.location.href = `dashboard_espectadores.html?code=${encodeURIComponent(code)}`;
+  });
+
+  logoutBtn.addEventListener("click", () => {
+    localStorage.removeItem("user");
+    localStorage.removeItem("sessionCode");
+    window.location.href = "index.html";
+  });
+</script>
+</body>
+</html>

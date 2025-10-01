@@ -31,10 +31,10 @@
     <img src="imagenes/logo.png" alt="Logo" class="logo">
 
     <div class="forms">
-      <!-- Profesores -->
+      <!-- Profesores / Alumnos -->
       <div class="form-box">
-        <h2>Profesores/Presentadores</h2>
-        <input id="loginEmail" type="email" placeholder="Correo Institucional | Matricula@merida.tecnm.mx" required>
+        <h2>Acceso al Sistema</h2>
+        <input id="loginEmail" type="email" placeholder="Correo Institucional | matricula@merida.tecnm.mx" required>
 
         <div class="password-wrapper">
           <input id="loginPassword" type="password" placeholder="Contraseña" required>
@@ -43,21 +43,21 @@
 
         <button id="loginBtn" class="btn-grad">INICIAR SESIÓN</button>
         <a href="register.html" class="register-link">Registrarse</a>
-         <a href="recuperacion.html" class="register-link">¿Olvidaste tu contraseña?</a>
+        <a href="recuperacion.html" class="register-link">¿Olvidaste tu contraseña?</a>
       </div>
 
-      <!-- Estudiantes -->
+      <!-- Invitados -->
       <div class="form-box">
-        <h2>Estudiantes/Asistentes</h2>
+        <h2>Acceso como Invitado</h2>
         <input id="sessionCode" type="text" placeholder="Código de Sesión">
-        <button id="anonBtn" class="btn-grad">ENTRAR DE FORMA ANÓNIMA</button>
-        <p class="info">No necesitas cuenta.</p>
+        <button id="anonBtn" class="btn-grad">ENTRAR</button>
+        <p class="info">No necesitas cuenta (solo podrás escuchar/ver).</p>
       </div>
     </div>
   </div>
 
 <script>
-// Toggle seguro (solo visible mientras se presiona)
+// Toggle seguro (ver solo mientras se presiona)
 const toggleLoginPassword = document.getElementById('toggleLoginPassword');
 const loginPasswordInput = document.getElementById('loginPassword');
 
@@ -65,17 +65,14 @@ toggleLoginPassword.addEventListener('mousedown', () => {
   loginPasswordInput.setAttribute('type', 'text');
   toggleLoginPassword.textContent = 'ocultar';
 });
-
 toggleLoginPassword.addEventListener('mouseup', () => {
   loginPasswordInput.setAttribute('type', 'password');
   toggleLoginPassword.textContent = 'ver';
 });
-
 toggleLoginPassword.addEventListener('mouseleave', () => {
   loginPasswordInput.setAttribute('type', 'password');
   toggleLoginPassword.textContent = 'ver';
 });
-
 loginPasswordInput.addEventListener('blur', () => {
   loginPasswordInput.setAttribute('type', 'password');
   toggleLoginPassword.textContent = 'ver';
@@ -87,7 +84,6 @@ document.getElementById('loginBtn').addEventListener('click', async () => {
   const password = loginPasswordInput.value;
 
   let errores = [];
-
   if (!correo) errores.push("Ingresa tu correo institucional");
   if (!password) errores.push("Ingresa tu contraseña");
 
@@ -95,16 +91,12 @@ document.getElementById('loginBtn').addEventListener('click', async () => {
     errores.push("El correo debe ser institucional (@merida.tecnm.mx)");
   }
 
-  if (password && password.length < 8) {
-    errores.push("La contraseña debe tener al menos 8 caracteres");
-  }
-
   if (errores.length > 0) {
     return alert("Error:\n- " + errores.join("\n- "));
   }
 
   try {
-    const res = await fetch('http://localhost:3000/api/login', {
+    const res = await fetch('http://localhost:3001/api/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ correo, password })
@@ -113,7 +105,15 @@ document.getElementById('loginBtn').addEventListener('click', async () => {
     const data = await res.json();
     if (res.ok) {
       localStorage.setItem('user', JSON.stringify(data.user));
-      window.location.href = 'dashboard.html';
+
+      // Redirección según rol
+      if (data.user.rol === 1) {
+        window.location.href = 'dashboard_profesor.html';
+      } else if (data.user.rol === 2) {
+        window.location.href = 'dashboard_alumno.html';
+      } else {
+        alert('Rol no reconocido');
+      }
     } else {
       alert('Error: ' + data.message);
     }
@@ -123,13 +123,14 @@ document.getElementById('loginBtn').addEventListener('click', async () => {
   }
 });
 
-// Login anónimo
+// Acceso anónimo
 document.getElementById('anonBtn').addEventListener('click', () => {
   const code = document.getElementById('sessionCode').value.trim();
   if (!code) return alert('Ingresa un código de sesión.');
 
-  localStorage.setItem('anonCode', code);
-  window.location.href = 'dashboard_anon.html';
+  localStorage.removeItem("user"); // forzar modo invitado
+  localStorage.setItem("sessionCode", code);
+  window.location.href = `dashboard_espectadores.html?code=${encodeURIComponent(code)}`;
 });
 </script>
 </body>
