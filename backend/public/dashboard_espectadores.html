@@ -75,14 +75,17 @@
   
   let pc; // RTCPeerConnection
 
-  // Habilitar chat si el usuario está logueado
-  if (user) {
+  // --- BLOQUEO PARA ANÓNIMOS ---
+  if (!user) {
+    chatInput.disabled = true;
+    sendBtn.disabled = true;
+    quickComments.forEach(btn => btn.disabled = true);
+    chatWarning.style.display = "block";
+  } else {
     chatInput.disabled = false;
     sendBtn.disabled = false;
     quickComments.forEach(btn => btn.disabled = false);
     chatWarning.style.display = "none";
-  } else {
-    chatWarning.style.display = "block";
   }
 
   // --- CONEXIÓN SOCKET.IO ---
@@ -106,7 +109,7 @@
   }
 
   function sendComment(message) {
-    if (!user) return; // Solo usuarios logueados pueden comentar
+    if (!user) return; // Bloquea anónimos
     if (!message.trim()) return;
 
     socket.emit("nuevo-mensaje", {
@@ -117,7 +120,6 @@
     chatInput.value = "";
   }
   
-  // Recibir historial y nuevos mensajes
   socket.on("chat-history", (messages) => {
     chatMessagesEl.innerHTML = "";
     messages.forEach(addChatMessage);
@@ -138,23 +140,17 @@
       window.location.href = "dashboard_alumno.html";
   });
 
-
   // --- WEBRTC (RECEPCIÓN) ---
-  
-  // Evento: Recibir señalización del presentador (Offer o Candidate)
   socket.on("signal", async ({ from, signal }) => {
       if (signal.type === 'offer') {
           if (pc) pc.close(); 
-          
           pc = new RTCPeerConnection();
           
-          // 1. Mostrar el video remoto cuando se reciben las pistas
           pc.ontrack = (event) => {
             videoElement.srcObject = event.streams[0];
             noStreamMessage.style.display = 'none';
           };
           
-          // 2. Manejo de candidatos ICE (enviarlos al presentador)
           pc.onicecandidate = ({ candidate }) => {
               if (candidate) {
                   socket.emit("signal", {
@@ -165,7 +161,6 @@
               }
           };
 
-          // 3. Establecer la Offer, crear y enviar la Answer
           await pc.setRemoteDescription(new RTCSessionDescription(signal.offer));
           const answer = await pc.createAnswer();
           await pc.setLocalDescription(answer);
@@ -177,7 +172,6 @@
           });
 
       } else if (signal.type === 'candidate' && pc) {
-          // 4. Recibir candidato ICE del presentador
           try {
               await pc.addIceCandidate(signal.candidate);
           } catch (e) {
@@ -185,7 +179,6 @@
           }
       }
   });
-
 
   // --- OTROS EVENT LISTENERS ---
   document.getElementById("copy-code-btn").addEventListener("click", () => {

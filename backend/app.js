@@ -160,7 +160,6 @@ app.get("/api/generate-pdf", (req, res) => {
     return res.status(404).json({ error: "Código de sala no encontrado o sin historial de chat." });
   }
 
-  // Crear carpeta reports si no existe
   const reportsDir = path.join(__dirname, "reports");
   fs.mkdirSync(reportsDir, { recursive: true });
 
@@ -168,8 +167,8 @@ app.get("/api/generate-pdf", (req, res) => {
   const filePath = path.join(reportsDir, fileName);
 
   const doc = new PDFDocument();
-  doc.pipe(fs.createWriteStream(filePath)); // Guardar en servidor
-  doc.pipe(res); // Enviar al cliente para descarga
+  doc.pipe(fs.createWriteStream(filePath));
+  doc.pipe(res);
 
   doc.fontSize(18).text(`Reporte de Chat - Sala ${codigo}`, { align: "center" });
   doc.moveDown();
@@ -184,7 +183,7 @@ app.get("/api/generate-pdf", (req, res) => {
 });
 
 // ----------------------------------------------------------------
-// SOCKET.IO (Chat + WebRTC)
+// SOCKET.IO (Chat + WebRTC + control invitados)
 // ----------------------------------------------------------------
 io.on("connection", (socket) => {
   console.log("Nuevo cliente conectado:", socket.id);
@@ -196,20 +195,29 @@ io.on("connection", (socket) => {
 
     socket.join(codigo);
     socket.data.roomCode = codigo;
-    socket.data.rol = rol;
-    socket.data.nombre = nombre;
 
-    console.log(`${rol} [${nombre}] unido a la sala: ${codigo}`);
-    socket.to(codigo).emit("user-joined", { id: socket.id, nombre, rol });
+    // Si no se pasa rol, asumimos invitado
+    socket.data.rol = rol || "invitado";
+    socket.data.nombre = nombre || "Invitado";
+
+    console.log(`${socket.data.rol} [${socket.data.nombre}] unido a la sala: ${codigo}`);
+    socket.to(codigo).emit("user-joined", { id: socket.id, nombre: socket.data.nombre, rol: socket.data.rol });
 
     const messages = chatHistory[codigo] || [];
     socket.emit("chat-history", messages);
 
-    callback({ success: true, message: `✅ Unido a la sala ${codigo} como ${rol}.` });
+    callback({ success: true, message: `✅ Unido a la sala ${codigo} como ${socket.data.rol}.` });
   });
 
   socket.on("nuevo-mensaje", ({ codigo, nombre, mensaje }) => {
     if (!sessionService.isCodeInUse(codigo) || !chatHistory[codigo]) return;
+
+    // Bloquear invitados
+    if (socket.data.rol === "invitado") {
+      socket.emit("mensaje-error", { message: "Invitados no pueden enviar mensajes." });
+      return;
+    }
+
     const msg = { nombre, mensaje, hora: new Date().toLocaleTimeString(), id: socket.id };
     chatHistory[codigo].push(msg);
     io.to(codigo).emit("mensaje-chat", msg);
