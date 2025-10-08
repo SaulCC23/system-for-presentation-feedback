@@ -17,13 +17,38 @@
     .btn {
       padding: 0.8rem 1.2rem;
       margin-top: 1rem;
+      margin-bottom: 20px;
       cursor: pointer;
       border: none;
       border-radius: 8px;
       font-weight: 600;
     }
+
+    .logout-btn {
+      background: #000;
+      color: #fff;
+      padding: 0.8rem 1.2rem;
+      border: none;
+      border-radius: 50px;
+      cursor: pointer;
+      font-size: 1rem;
+      font-weight: 600;
+      margin-top: 2rem;
+      transition: opacity 0.3s;
+    }
+
+.session-box{
+    inset: 0;
+    border-radius: 10px;
+    padding: 20px 50px;
+}
+
     .btn:hover {
       opacity: 0.8;
+    }
+
+    .centrar{
+      margin: auto;
     }
   </style>
 </head>
@@ -31,22 +56,22 @@
   <div class="container">
     <h1>MODO ALUMNO</h1>
 
-    <div class="">
+    <div>
       <p>Introduce el código de sesión del profesor:</p>
-      <input type="text" id="sessionCodeInput" placeholder="Ej: 123456" />
+      <input type="text" id="sessionCodeInput" class="session-box" placeholder="Ej: 123456" />
     </div>
 
-    <button id="join-btn" class="btn" style="background-color:#4CAF50; color:#fff;">UNIRME A LA SESIÓN</button>
+    <button id="join-btn" class="btn centrar" >UNIRME A LA SESIÓN</button>
     <hr>
-    <button id="logout-btn" class="btn" style="background-color:#f44336; color:#fff;">Cerrar Sesión</button>
+    <button id="logout-btn" class="logout-btn centrar">Cerrar Sesión</button>
   </div>
 
 <script>
   const user = JSON.parse(localStorage.getItem('user'));
 
-  // Solo alumnos o invitados pueden acceder
-  if (user && user.rol !== 2) {
-    alert("Acceso no autorizado para esta página");
+  // Solo permitir acceso si está logueado y es alumno
+  if (!user || user.rol !== 2) {
+    alert("Debes iniciar sesión como alumno para acceder a esta página.");
     window.location.href = "index.html";
   }
 
@@ -57,6 +82,12 @@
     const code = document.getElementById("sessionCodeInput").value.trim();
     if (!code) {
       alert("Debes ingresar un código de sesión.");
+      return;
+    }
+
+    // Validar que el código sea 123456 o 123457
+    if (code !== "123456" && code !== "123457") {
+      alert("Código de sesión inválido.");
       return;
     }
 

@@ -1,127 +1,190 @@
 <!DOCTYPE html>
 <html lang="es">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Vista del Presentador</title>
-  <link rel="stylesheet" href="dashboard_presentador.css">
-</head>
-<body>
-  <div class="container">
-    
-    <div class="presentacion">
-      <h1>Bienvenido</h1>
-      <div class="slide">
-       
-        <video id="preview" autoplay playsinline muted></video>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Vista del Presentador</title>
+    <link rel="stylesheet" href="dashboard_presentador.css" />
+  </head>
+
+  <body>
+    <div class="container">
+      <div class="presentacion">
+        <h1>Bienvenido</h1>
+
+        <div class="slide">
+          <video id="preview" autoplay playsinline muted></video>
+        </div>
+
+        <div class="controles">
+          <button id="start-btn">Transmite tu cámara</button>
+          <button id="stop-btn" disabled>Dejar de transmitir</button>
+          <button id="share-screen">Compartir Pantalla</button>
+        </div>
       </div>
 
-      <div class="controles">
-        <button id="start-btn"> Transmite tu camara</button>
-        <button id="stop-btn" disabled> Detener</button>
-        <button id="share-screen"> Compartir Pantalla</button>
+      <div class="feedback">
+        <h3>HERRAMIENTAS DEL PRESENTADOR</h3>
+        <p class="codigo">
+          CÓDIGO DE SESIÓN: <strong id="session-code">N/A</strong>
+        </p>
+        <button class="share" id="copy-code">Copiar código</button>
+
+        <button class="reporte" id="download-pdf-btn">
+          Descargar Reporte (PDF) 📄
+        </button>
+
+        <div class="estado">
+          <h4>ESTADO DE TRANSMISIÓN</h4>
+          <p id="status">Esperando...</p>
+        </div>
+
+        <div class="chat">
+          <h4>CHAT DE ESPECTADORES</h4>
+          <div id="chat-messages" class="chat-messages"></div>
+        </div>
       </div>
     </div>
 
-    
-    <div class="feedback">
-      <h3>HERRAMIENTAS DEL PRESENTADOR</h3>
-      <p class="codigo">CÃ“DIGO DE SESIÃ“N: <strong>F3AA-B89C</strong></p>
-      <button class="share"> Copiar cÃ³digo</button>
+    <script>
+      // ---------- VALIDACIÓN DE USUARIO ----------
+      const user = JSON.parse(localStorage.getItem("user"));
+      const allowedCodes = ["123456", "123457"];
+      const sessionCode = localStorage.getItem("sessionCode");
 
-      
-      <div class="estado">
-        <h4>ESTADO DE TRANSMISIÃ“N</h4>
-        <p id="status"> Esperando...</p>
-      </div>
-
-      
-      <div class="chat">
-        <h4>CHAT DE ESPECTADORES</h4>
-        <div id="chat-messages" class="chat-messages"></div>
-      </div>
-    </div>
-  </div>
-
-  <script>
-
-    const video = document.getElementById("preview");
-    const startBtn = document.getElementById("start-btn");
-    const stopBtn = document.getElementById("stop-btn");
-    const shareBtn = document.getElementById("share-screen");
-    const statusEl = document.getElementById("status");
-
-    let pc, stream;
-
-    async function startStream() {
-      try {
-        stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-        video.srcObject = stream;
-
-        pc = new RTCPeerConnection();
-
-        
-        stream.getTracks().forEach(track => pc.addTrack(track, stream));
-
-        
-        const offer = await pc.createOffer();
-        await pc.setLocalDescription(offer);
-
-       
-        const answer = await fetch("/webrtc-offer", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ sdp: pc.localDescription })
-        }).then(res => res.json());
-
-        await pc.setRemoteDescription(new RTCSessionDescription(answer));
-
-        statusEl.textContent = " Transmitiendo en vivo";
-        startBtn.disabled = true;
-        stopBtn.disabled = false;
-      } catch (err) {
-        console.error(err);
-        statusEl.textContent = " Error al iniciar transmisiÃ³n";
+      if (!user || user.rol !== 1) {
+        alert("Acceso no autorizado");
+        window.location.href = "index.html";
+      } else if (!sessionCode || !allowedCodes.includes(sessionCode)) {
+        alert("Código de sesión inválido. Regresa al panel de profesor.");
+        window.location.href = "dashboard_profesor.html";
+      } else {
+        console.log("Profesor autorizado:", user.nombre_completo);
+        document.getElementById("session-code").textContent = sessionCode;
       }
-    }
 
-    function stopStream() {
-      if (stream) {
-        stream.getTracks().forEach(track => track.stop());
-      }
-      if (pc) {
-        pc.close();
-      }
-      statusEl.textContent = " TransmisiÃ³n detenida";
-      startBtn.disabled = false;
-      stopBtn.disabled = true;
-    }
+      // ---------- BOTÓN COPIAR CÓDIGO ----------
+      document.getElementById("copy-code").addEventListener("click", () => {
+        navigator.clipboard.writeText(sessionCode).then(() => {
+          alert("Código copiado: " + sessionCode);
+        });
+      });
 
-    async function shareScreen() {
-      try {
-        const screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true });
-        const screenTrack = screenStream.getVideoTracks()[0];
+      // ---------- BOTÓN DESCARGAR PDF ----------
+      document
+        .getElementById("download-pdf-btn")
+        .addEventListener("click", async () => {
+          try {
+            const response = await fetch("http://localhost:3001/api/generate-pdf");
 
-        
-        const sender = pc.getSenders().find(s => s.track.kind === "video");
-        sender.replaceTrack(screenTrack);
+            if (!response.ok) {
+              alert("Error generando el reporte PDF");
+              return;
+            }
 
-        video.srcObject = screenStream;
+            // Recibir el PDF como blob
+            const blob = await response.blob();
+            const url = window.URL.createObjectURL(blob);
 
-        screenTrack.onended = () => {
-          
-          stream.getVideoTracks()[0].enabled = true;
-          sender.replaceTrack(stream.getVideoTracks()[0]);
+            // Crear un enlace temporal para descarga
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = "reporte_comentarios.pdf"; // nombre del archivo
+            a.click();
+
+            // Liberar memoria
+            window.URL.revokeObjectURL(url);
+          } catch (error) {
+            console.error("Error al descargar el PDF:", error);
+            alert("Ocurrió un error al descargar el reporte");
+          }
+        });
+
+      // ---------- WEBRTC PARA TRANSMISIÓN ----------
+      const video = document.getElementById("preview");
+      const startBtn = document.getElementById("start-btn");
+      const stopBtn = document.getElementById("stop-btn");
+      const shareBtn = document.getElementById("share-screen");
+      const statusEl = document.getElementById("status");
+      let pc, stream;
+
+      async function startStream() {
+        try {
+          stream = await navigator.mediaDevices.getUserMedia({
+            video: true,
+            audio: true,
+          });
           video.srcObject = stream;
-        };
-      } catch (err) {
-        console.error("Error compartiendo pantalla:", err);
-      }
-    }
 
-    startBtn.addEventListener("click", startStream);
-    stopBtn.addEventListener("click", stopStream);
-    shareBtn.addEventListener("click", shareScreen);
-  </script>
-</body>
+          pc = new RTCPeerConnection();
+          stream.getTracks().forEach((track) => pc.addTrack(track, stream));
+
+          const offer = await pc.createOffer();
+          await pc.setLocalDescription(offer);
+
+          const answer = await fetch("/webrtc-offer", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ sdp: pc.localDescription }),
+          }).then((res) => res.json());
+
+          await pc.setRemoteDescription(new RTCSessionDescription(answer));
+
+          statusEl.textContent = "Transmitiendo en vivo";
+          startBtn.disabled = true;
+          stopBtn.disabled = false;
+        } catch (err) {
+          console.error(err);
+          statusEl.textContent = "Error al iniciar transmisión";
+        }
+      }
+
+      function stopStream() {
+        if (stream) {
+          stream.getTracks().forEach((track) => track.stop());
+        }
+
+        if (video.srcObject && video.srcObject !== stream) {
+          video.srcObject.getTracks().forEach((track) => track.stop());
+        }
+
+        if (pc) pc.close();
+
+        video.srcObject = null;
+        statusEl.textContent = "Transmisión detenida";
+        startBtn.disabled = false;
+        stopBtn.disabled = true;
+      }
+
+      async function shareScreen() {
+        try {
+          const screenStream = await navigator.mediaDevices.getDisplayMedia({
+            video: true,
+          });
+          const screenTrack = screenStream.getVideoTracks()[0];
+
+          const sender = pc.getSenders().find((s) => s.track.kind === "video");
+          sender.replaceTrack(screenTrack);
+
+          video.srcObject = screenStream;
+
+          screenTrack.onended = () => {
+            if (stream) {
+              const camTrack = stream.getVideoTracks()[0];
+              if (camTrack) {
+                sender.replaceTrack(camTrack);
+                video.srcObject = stream;
+              }
+            }
+          };
+        } catch (err) {
+          console.error("Error compartiendo pantalla:", err);
+        }
+      }
+
+      startBtn.addEventListener("click", startStream);
+      stopBtn.addEventListener("click", stopStream);
+      shareBtn.addEventListener("click", shareScreen);
+    </script>
+  </body>
 </html>

@@ -123,10 +123,14 @@ document.getElementById('loginBtn').addEventListener('click', async () => {
   }
 });
 
-// Acceso anónimo
+// Acceso anónimo con validación
 document.getElementById('anonBtn').addEventListener('click', () => {
   const code = document.getElementById('sessionCode').value.trim();
   if (!code) return alert('Ingresa un código de sesión.');
+
+  if (code !== "123456") {
+    return alert("Código inválido. Intenta nuevamente.");
+  }
 
   localStorage.removeItem("user"); // forzar modo invitado
   localStorage.setItem("sessionCode", code);

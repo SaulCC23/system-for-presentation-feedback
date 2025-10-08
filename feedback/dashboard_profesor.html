@@ -21,7 +21,6 @@
     .logout-btn:hover {
       opacity: 0.8;
     }
-
     .btn-group .btn {
       margin: 0.5rem;
       padding: 0.8rem 1.2rem;
@@ -52,9 +51,8 @@
       <h3>CONTROLES DE PRESENTACIÓN</h3>
       <div class="btn-group">
         <button class="btn" id="go-presenter">MODO PRESENTADOR</button>
-        <button class="btn">INICIAR NUEVA SESIÓN</button>
-        <button class="btn">FINALIZAR SESIÓN</button>
-        <button class="btn">SIGUIENTE DIAPOSITIVA</button>
+        <button class="btn" id="start-session">INICIAR NUEVA SESIÓN</button>
+        <button class="btn">GENERAR CÓDIGO</button>
       </div>
     </div>
 
@@ -72,25 +70,31 @@
     console.log("Bienvenido, profesor:", user.nombre_completo);
   }
 
-  // Generar código de sesión aleatorio
-  function generarCodigo() {
-    const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
-    let code = "";
-    for (let i = 0; i < 8; i++) {
-      code += chars.charAt(Math.floor(Math.random() * chars.length));
-      if (i === 3) code += "-";
-    }
-    return code;
+  // Códigos de sesión permitidos
+  const codigosPermitidos = ["123456", "123457"];
+  let currentIndex = 0;
+
+  function setSessionCode() {
+    const sessionCode = codigosPermitidos[currentIndex];
+    document.getElementById('session-code').textContent = sessionCode;
+    localStorage.setItem('sessionCode', sessionCode);
   }
 
-  const sessionCode = generarCodigo();
-  document.getElementById('session-code').textContent = sessionCode;
-  localStorage.setItem('sessionCode', sessionCode);
+  // Inicializa con el primer código
+  setSessionCode();
+
+  // Botón de iniciar nueva sesión: cambia al siguiente código disponible
+  document.getElementById('start-session').addEventListener('click', () => {
+    currentIndex = (currentIndex + 1) % codigosPermitidos.length;
+    setSessionCode();
+    alert("Sesión iniciada con código: " + codigosPermitidos[currentIndex]);
+  });
 
   // Copiar código
   document.getElementById('copy-code').addEventListener('click', () => {
-    navigator.clipboard.writeText(sessionCode).then(() => {
-      alert("Código copiado: " + sessionCode);
+    const code = document.getElementById('session-code').textContent;
+    navigator.clipboard.writeText(code).then(() => {
+      alert("Código copiado: " + code);
     });
   });
 
