@@ -41,7 +41,7 @@ h1 {
   border-radius: 10px;
   padding: 2px;
   background: linear-gradient(90deg, #00f2fe, #4facfe, #f093fb);
-  -webkit-mask: 
+  -webkit-mask:
     linear-gradient(#fff 0 0) content-box, 
     linear-gradient(#fff 0 0);
   -webkit-mask-composite: destination-out;

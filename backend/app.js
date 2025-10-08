@@ -1,6 +1,6 @@
 // ==========================================================
 // app.js
-// Servidor Node.js con Express, Socket.IO y MySQL
+// Servidor Node.js con Express, Socket.IO y MySQL + PDFKit
 // ==========================================================
 
 const express = require("express");
@@ -10,6 +10,8 @@ const cors = require("cors");
 const path = require("path");
 const mysql = require("mysql2/promise");
 const bcrypt = require("bcryptjs");
+const PDFDocument = require("pdfkit");
+const fs = require("fs");
 
 // ----------------------------------------------------------------
 // INTEGRACIÓN DEL SERVICIO DE SESIONES
@@ -53,10 +55,6 @@ const db = mysql.createPool({
 // LOGIN Y REGISTRO DE USUARIOS
 // ----------------------------------------------------------------
 
-/**
- * POST /api/login
- * Autentica un usuario y devuelve sus datos y rol.
- */
 app.post("/api/login", async (req, res) => {
   const { correo, password } = req.body;
   if (!correo || !password) {
@@ -81,7 +79,7 @@ app.post("/api/login", async (req, res) => {
     res.json({
       user: {
         id: user.id_usuario,
-        nombre: user.nombre_completo,
+        nombre_completo: user.nombre_completo,
         correo: user.correo,
         rol: user.id_rol,
         rolNombre,
@@ -93,10 +91,6 @@ app.post("/api/login", async (req, res) => {
   }
 });
 
-/**
- * POST /api/register
- * Registra un nuevo usuario (Alumno por defecto).
- */
 app.post("/api/register", async (req, res) => {
   const { nombre_completo, correo, password, id_rol } = req.body;
 
@@ -105,21 +99,16 @@ app.post("/api/register", async (req, res) => {
   }
 
   try {
-    // Verificar si ya existe el correo
     const [existe] = await db.query("SELECT * FROM usuarios WHERE correo = ?", [correo]);
     if (existe.length > 0) {
       return res.status(409).json({ message: "El correo ya está registrado" });
     }
 
-    // Validar correo institucional
     if (!correo.endsWith("@merida.tecnm.mx")) {
       return res.status(400).json({ message: "El correo debe ser institucional (@merida.tecnm.mx)" });
     }
 
-    // Encriptar contraseña
     const hashedPassword = await bcrypt.hash(password, 10);
-
-    // Rol por defecto = Alumno (id_rol = 2)
     const rolAsignado = id_rol || 2;
 
     await db.query(
@@ -135,9 +124,8 @@ app.post("/api/register", async (req, res) => {
 });
 
 // ----------------------------------------------------------------
-// RUTAS DE SESIONES EXISTENTES
+// RUTAS DE SESIONES Y CHAT
 // ----------------------------------------------------------------
-
 const chatHistory = {}; // { codigo_sesion: [{ nombre, mensaje, hora, id }] }
 
 app.post("/api/sessions", (req, res) => {
@@ -161,6 +149,9 @@ app.get("/api/sessions/:code/status", (req, res) => {
   res.json({ code, isActive: inUse });
 });
 
+// ----------------------------------------------------------------
+// GENERAR PDF REAL CON PDFKIT
+// ----------------------------------------------------------------
 app.get("/api/generate-pdf", (req, res) => {
   const codigo = req.query.codigo;
   const messages = chatHistory[codigo];
@@ -169,22 +160,31 @@ app.get("/api/generate-pdf", (req, res) => {
     return res.status(404).json({ error: "Código de sala no encontrado o sin historial de chat." });
   }
 
-  const pdfContent = messages
-    .map((msg) => `[${msg.hora}] ${msg.nombre}: ${msg.mensaje}`)
-    .join("\n\n");
+  // Crear carpeta reports si no existe
+  const reportsDir = path.join(__dirname, "reports");
+  fs.mkdirSync(reportsDir, { recursive: true });
 
-  const buffer = Buffer.from(
-    `Reporte de Chat - Sala ${codigo}\n\n=================================\n\n${pdfContent}`,
-    "utf-8"
-  );
+  const fileName = `reporte_chat_${codigo}.pdf`;
+  const filePath = path.join(reportsDir, fileName);
 
-  res.setHeader("Content-Type", "application/pdf");
-  res.setHeader("Content-Disposition", `attachment; filename=reporte_chat_${codigo}.pdf`);
-  res.send(buffer);
+  const doc = new PDFDocument();
+  doc.pipe(fs.createWriteStream(filePath)); // Guardar en servidor
+  doc.pipe(res); // Enviar al cliente para descarga
+
+  doc.fontSize(18).text(`Reporte de Chat - Sala ${codigo}`, { align: "center" });
+  doc.moveDown();
+  doc.fontSize(12);
+
+  messages.forEach((msg) => {
+    doc.text(`[${msg.hora}] ${msg.nombre}: ${msg.mensaje}`);
+    doc.moveDown(0.5);
+  });
+
+  doc.end();
 });
 
 // ----------------------------------------------------------------
-// SOCKET.IO (Chat en tiempo real + WebRTC señalización)
+// SOCKET.IO (Chat + WebRTC)
 // ----------------------------------------------------------------
 io.on("connection", (socket) => {
   console.log("Nuevo cliente conectado:", socket.id);
@@ -217,7 +217,7 @@ io.on("connection", (socket) => {
 
   socket.on("signal", ({ codigo, to, signal }) => {
     if (!sessionService.isCodeInUse(codigo) || !to || !signal) return;
-    io.to(to).emit("signal", { from: socket.id, signal: signal });
+    io.to(to).emit("signal", { from: socket.id, signal });
   });
 
   socket.on("disconnect", () => {

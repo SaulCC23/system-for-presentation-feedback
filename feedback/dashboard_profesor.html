@@ -5,25 +5,16 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Modo Profesor</title>
   <link rel="stylesheet" href="dashboard_profesor.css">
-  <style>
-    /* Estilos base (puedes dejarlos o eliminarlos si usas un archivo CSS separado) */
-    .logout-btn { background: #000; color: #fff; padding: 0.8rem 1.2rem; border: none; border-radius: 50px; cursor: pointer; font-size: 1rem; font-weight: 600; margin-top: 2rem; transition: opacity 0.3s; }
-    .logout-btn:hover { opacity: 0.8; }
-    .btn-group .btn { margin: 0.5rem; padding: 0.8rem 1.2rem; cursor: pointer; border-radius: 8px; border: none; font-weight: 600; }
-    .btn-group .btn:hover { opacity: 0.8; }
-  </style>
 </head>
 <body>
   <div class="container">
     <h1>MODO PROFESOR</h1>
-
     <div class="session-box">
       <p>CÓDIGO DE SESIÓN:</p>
       <h2><span id="session-code">Cargando...</span></h2>
     </div>
 
     <button class="share-btn" id="copy-code">COMPARTIR CÓDIGO</button>
-
     <hr>
 
     <div class="controls">
@@ -38,105 +29,70 @@
   </div>
 
 <script>
-  // URL base para la gestión de sesiones en el servidor.
-  const API_URL = "http://localhost:3001/api/sessions";
+const API_URL = "http://localhost:3001/api/sessions";
+const user = JSON.parse(localStorage.getItem('user'));
+const sessionCodeSpan = document.getElementById('session-code');
+const goPresenterBtn = document.getElementById('go-presenter');
+const generateCodeBtn = document.getElementById('generate-code-btn');
 
-  const user = JSON.parse(localStorage.getItem('user'));
-  const sessionCodeSpan = document.getElementById('session-code');
-  const goPresenterBtn = document.getElementById('go-presenter');
-  const generateCodeBtn = document.getElementById('generate-code-btn');
+if (!user || user.rol !== 1) {
+  alert("Acceso no autorizado");
+  window.location.href = "index.html";
+} else initializeSessionCode();
 
-  // 1. VALIDACIÓN DE ACCESO
-  if (!user || user.rol !== 1) {
-    alert("Acceso no autorizado");
-    window.location.href = "index.html";
-  } else {
-    // 2. INTENTA RECUPERAR O GENERAR CÓDIGO AL CARGAR
-    initializeSessionCode();
+async function generateNewSessionCode() {
+  sessionCodeSpan.textContent = "Generando...";
+  goPresenterBtn.disabled = true;
+  try {
+    const res = await fetch(API_URL, { method: 'POST' });
+    const data = await res.json();
+    const newCode = data.code;
+    sessionCodeSpan.textContent = newCode;
+    localStorage.setItem('sessionCode', newCode);
+    alert(`✅ Nueva sesión creada: ${newCode}`);
+  } catch (err) {
+    console.error(err);
+    sessionCodeSpan.textContent = "ERROR";
+    alert("No se pudo generar el código.");
+  } finally {
+    goPresenterBtn.disabled = false;
   }
+}
 
-  /**
-   * Genera un nuevo código de sesión haciendo una petición POST a la API.
-   */
-  async function generateNewSessionCode() {
-    sessionCodeSpan.textContent = "Generando...";
-    goPresenterBtn.disabled = true;
-
+async function initializeSessionCode() {
+  let currentCode = localStorage.getItem('sessionCode');
+  if (currentCode) {
     try {
-      // Llama a POST /api/sessions para crear una nueva sesión
-      const response = await fetch(API_URL, { method: 'POST' });
-      if (!response.ok) throw new Error(`Error ${response.status} al crear sesión.`);
-
-      const data = await response.json();
-      const newCode = data.code;
-
-      // Actualiza la UI y guarda en localStorage
-      sessionCodeSpan.textContent = newCode;
-      localStorage.setItem('sessionCode', newCode);
-      alert(`✅ Nueva sesión creada: ${newCode}`);
-    } catch (error) {
-      console.error("Error al generar código:", error);
-      sessionCodeSpan.textContent = "ERROR";
-      alert("No se pudo conectar con el servidor para generar el código. Revisa tu app.js.");
-    } finally {
-      goPresenterBtn.disabled = false;
-    }
-  }
-
-  /**
-   * Intenta recuperar el código guardado en localStorage y valida su estado con la API.
-   * Si no está activo o no existe, genera uno nuevo.
-   */
-  async function initializeSessionCode() {
-    let currentCode = localStorage.getItem('sessionCode');
-    
-    if (currentCode) {
-      try {
-        // Llama a GET /api/sessions/:code/status
-        const statusResponse = await fetch(`${API_URL}/${currentCode}/status`);
-        const statusData = await statusResponse.json();
-
-        if (statusData.isActive) {
-          // El código guardado sigue activo, lo mostramos y terminamos
-          sessionCodeSpan.textContent = currentCode;
-          return; 
-        }
-      } catch (error) {
-        // Si hay un error de conexión, la consola lo mostrará. Intentamos generar uno nuevo.
-        console.warn("No se pudo validar el código anterior, generando uno nuevo.");
+      const statusRes = await fetch(`${API_URL}/${currentCode}/status`);
+      const statusData = await statusRes.json();
+      if (statusData.isActive) {
+        sessionCodeSpan.textContent = currentCode;
+        return;
       }
-    }
-    
-    // Si no había código o no estaba activo, generamos uno nuevo
-    await generateNewSessionCode();
+    } catch {}
   }
+  await generateNewSessionCode();
+}
 
-  // 3. EVENT LISTENERS
-  generateCodeBtn.addEventListener('click', generateNewSessionCode);
+generateCodeBtn.addEventListener('click', generateNewSessionCode);
 
-  document.getElementById('copy-code').addEventListener('click', () => {
-    const code = sessionCodeSpan.textContent;
-    if (code === 'Cargando...' || code === 'ERROR') return;
-    navigator.clipboard.writeText(code).then(() => alert("Código copiado: " + code));
-  });
+document.getElementById('copy-code').addEventListener('click', () => {
+  const code = sessionCodeSpan.textContent;
+  if (!/^\d{6}$/.test(code)) return;
+  navigator.clipboard.writeText(code).then(() => alert("Código copiado: " + code));
+});
 
-  document.getElementById('go-presenter').addEventListener('click', () => {
-    const currentCode = sessionCodeSpan.textContent;
-    
-    if (currentCode === 'Cargando...' || currentCode === 'ERROR' || !/^\d{6}$/.test(currentCode)) {
-         alert('El código de sesión no es válido. Intenta generar uno nuevo.');
-         return;
-    }
-    // Redirige al presentador con el código en la URL
-    window.location.href = `Dashboard_presentador.html?code=${currentCode}`;
-  });
+goPresenterBtn.addEventListener('click', () => {
+  const code = sessionCodeSpan.textContent;
+  if (!/^\d{6}$/.test(code)) return alert('Código inválido.');
+  window.location.href = `dashboard_presentador.html?code=${code}`;
+});
 
-  document.getElementById('logoutBtn').addEventListener('click', () => {
-    // Es buena práctica limpiar la sesión local al salir
-    localStorage.removeItem('user');
-    localStorage.removeItem('sessionCode'); 
-    window.location.href = "index.html";
-  });
+document.getElementById('logoutBtn').addEventListener('click', () => {
+  localStorage.removeItem('user');
+  localStorage.removeItem('sessionCode'); 
+  window.location.href = "index.html";
+});
 </script>
 </body>
 </html>

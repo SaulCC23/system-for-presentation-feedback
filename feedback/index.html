@@ -57,7 +57,7 @@
   </div>
 
 <script>
-// Toggle seguro (ver solo mientras se presiona)
+// Toggle seguro
 const toggleLoginPassword = document.getElementById('toggleLoginPassword');
 const loginPasswordInput = document.getElementById('loginPassword');
 
@@ -86,14 +86,9 @@ document.getElementById('loginBtn').addEventListener('click', async () => {
   let errores = [];
   if (!correo) errores.push("Ingresa tu correo institucional");
   if (!password) errores.push("Ingresa tu contraseña");
+  if (correo && !correo.endsWith("@merida.tecnm.mx")) errores.push("El correo debe ser institucional (@merida.tecnm.mx)");
 
-  if (correo && !correo.endsWith("@merida.tecnm.mx")) {
-    errores.push("El correo debe ser institucional (@merida.tecnm.mx)");
-  }
-
-  if (errores.length > 0) {
-    return alert("Error:\n- " + errores.join("\n- "));
-  }
+  if (errores.length > 0) return alert("Error:\n- " + errores.join("\n- "));
 
   try {
     const res = await fetch('http://localhost:3001/api/login', {
@@ -106,14 +101,9 @@ document.getElementById('loginBtn').addEventListener('click', async () => {
     if (res.ok) {
       localStorage.setItem('user', JSON.stringify(data.user));
 
-      // Redirección según rol
-      if (data.user.rol === 1) {
-        window.location.href = 'dashboard_profesor.html';
-      } else if (data.user.rol === 2) {
-        window.location.href = 'dashboard_alumno.html';
-      } else {
-        alert('Rol no reconocido');
-      }
+      if (data.user.rol === 1) window.location.href = 'dashboard_profesor.html';
+      else if (data.user.rol === 2) window.location.href = 'dashboard_alumno.html';
+      else alert('Rol no reconocido');
     } else {
       alert('Error: ' + data.message);
     }
@@ -123,15 +113,23 @@ document.getElementById('loginBtn').addEventListener('click', async () => {
   }
 });
 
-// Acceso anónimo con validación
-document.getElementById('anonBtn').addEventListener('click', () => {
+// Acceso anónimo con validación del código
+document.getElementById('anonBtn').addEventListener('click', async () => {
   const code = document.getElementById('sessionCode').value.trim();
   if (!code) return alert('Ingresa un código de sesión.');
 
+  try {
+    const res = await fetch(`http://localhost:3001/api/sessions/${code}/status`);
+    const data = await res.json();
+    if (!data.isActive) return alert("Código de sesión inválido o expirado.");
 
-  localStorage.removeItem("user"); // forzar modo invitado
-  localStorage.setItem("sessionCode", code);
-  window.location.href = `dashboard_espectadores.html?code=${encodeURIComponent(code)}`;
+    localStorage.removeItem("user"); // invitado
+    localStorage.setItem("sessionCode", code);
+    window.location.href = `dashboard_espectadores.html?code=${encodeURIComponent(code)}`;
+  } catch(err) {
+    console.error(err);
+    alert("Error de conexión con el servidor");
+  }
 });
 </script>
 </body>
