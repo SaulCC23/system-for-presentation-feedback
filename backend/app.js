@@ -1,285 +1,141 @@
-require("dotenv").config();
+// app.js
 const express = require("express");
-const mysql = require("mysql2/promise");
-const bcrypt = require("bcryptjs");
+const http = require("http");
+const socketIO = require("socket.io");
+const { Server } = require("socket.io");
 const cors = require("cors");
-const { body, validationResult } = require("express-validator");
-const PDFDocument = require("pdfkit");
 const fs = require("fs");
 const path = require("path");
+const { jsPDF } = require("jspdf");
 
 const app = express();
+const server = http.createServer(app);
+const io = new Server(server, {
+  cors: {
+    origin: "*",
+  },
+});
+
 app.use(cors());
 app.use(express.json());
+app.use(express.static("public"));
 
-// Ruta al JSON de comentarios
-const commentsFile = path.join(__dirname, "comments.json");
+/* ==========================================================
+   ESTRUCTURA DE DATOS EN MEMORIA
+========================================================== */
+const sessions = {}; // { codigo_sesion: { presentadorSocketId, espectadores: [], mensajes: [] } }
 
-// Pool de conexiones
-const pool = mysql.createPool({
-  host: process.env.DB_HOST || "localhost",
-  user: process.env.DB_USER || "root",
-  password: process.env.DB_PASSWORD || "",
-  database: process.env.DB_NAME || "peer_review",
-  waitForConnections: true,
-  connectionLimit: 10,
-  queueLimit: 0,
-  charset: "utf8mb4",
-});
+/* ==========================================================
+   MANEJO DE SOCKET.IO
+========================================================== */
+io.on("connection", (socket) => {
+  console.log("nuevo cliente conectado:", socket.id);
 
-// Mapeo de roles del front a id_rol en DB
-const roleMap = {
-  student: 2,
-  professor: 1,
-  moderator: 3,
-};
-
-// Regla de contraseña
-const passwordRegex = /^(?=.*[A-Z])(?=.*\d).{8,}$/;
-
-// -------------------- REGISTRO --------------------
-app.post(
-  "/api/register",
-  [
-    body("firstName").trim().notEmpty().withMessage("firstName requerido"),
-    body("lastName").trim().notEmpty().withMessage("lastName requerido"),
-    body("institutionalEmail")
-      .isEmail()
-      .withMessage("email institucional inválido"),
-    body("recoveryEmail")
-      .optional()
-      .isEmail()
-      .withMessage("email de recuperación inválido")
-      .custom((value, { req }) => {
-        if (value && value === req.body.institutionalEmail) {
-          throw new Error(
-            "El correo de recuperación no puede ser igual al institucional"
-          );
-        }
-        return true;
-      }),
-    body("password")
-      .matches(passwordRegex)
-      .withMessage("Contraseña: min 8 chars, 1 mayúscula y 1 número"),
-    body("role")
-      .isIn(["student", "professor", "moderator"])
-      .withMessage("role inválido"),
-  ],
-  async (req, res) => {
-    const errors = validationResult(req);
-    if (!errors.isEmpty())
-      return res.status(400).json({ errors: errors.array() });
-
-    const {
-      firstName,
-      lastName,
-      institutionalEmail,
-      recoveryEmail,
-      password,
-      role,
-    } = req.body;
-
-    const nombre_completo = `${firstName} ${lastName}`;
-    const correo = institutionalEmail;
-    const id_rol = roleMap[role] || 2;
-
-    try {
-      const [existing] = await pool.execute(
-        "SELECT id_usuario FROM usuarios WHERE correo = ?",
-        [correo]
-      );
-      if (existing.length)
-        return res.status(409).json({ message: "Correo ya registrado" });
-
-      const saltRounds = 10;
-      const hashed = await bcrypt.hash(password, saltRounds);
-
-      const sql =
-        "INSERT INTO usuarios (nombre_completo, correo, contrasena, id_rol) VALUES (?, ?, ?, ?)";
-      const [result] = await pool.execute(sql, [
-        nombre_completo,
-        correo,
-        hashed,
-        id_rol,
-      ]);
-
-      return res
-        .status(201)
-        .json({ message: "Usuario creado", userId: result.insertId });
-    } catch (err) {
-      console.error(err);
-      return res.status(500).json({ message: "Error en el servidor" });
+  // --- unir a una sala ---
+  socket.on("join-session", ({ codigo, rol, nombre }) => {
+    if (!sessions[codigo]) {
+      sessions[codigo] = {
+        presentadorSocketId: null,
+        espectadores: [],
+        mensajes: [],
+      };
     }
-  }
-);
 
-// -------------------- LOGIN --------------------
-app.post(
-  "/api/login",
-  [
-    body("correo").isEmail().withMessage("Correo inválido"),
-    body("password").notEmpty().withMessage("Password requerido"),
-  ],
-  async (req, res) => {
-    const errors = validationResult(req);
-    if (!errors.isEmpty())
-      return res.status(400).json({ errors: errors.array() });
+    socket.join(codigo);
 
-    const { correo, password } = req.body;
-
-    try {
-      const [rows] = await pool.execute(
-        "SELECT * FROM usuarios WHERE correo = ?",
-        [correo]
-      );
-
-      if (rows.length === 0) {
-        return res.status(404).json({ message: "Correo no registrado" });
-      }
-
-      const user = rows[0];
-      const isMatch = await bcrypt.compare(
-        password,
-        user.contrasena || user["contraseña"]
-      );
-      if (!isMatch) {
-        return res.status(401).json({ message: "Contraseña incorrecta" });
-      }
-
-      res.json({
-        message: "Login exitoso",
-        user: {
-          id: user.id_usuario,
-          nombre_completo: user.nombre_completo,
-          correo: user.correo,
-          rol: user.id_rol,
-        },
-      });
-    } catch (err) {
-      console.error(err);
-      return res.status(500).json({ message: "Error en el servidor" });
+    if (rol === "presentador") {
+      sessions[codigo].presentadorSocketId = socket.id;
+      console.log(`presentador unido a la sala ${codigo}`);
+    } else {
+      sessions[codigo].espectadores.push(socket.id);
+      console.log(`espectador unido a la sala ${codigo}`);
     }
-  }
-);
 
-// -------------------- WEBRTC --------------------
-app.post("/webrtc-offer", async (req, res) => {
-  try {
-    const { sdp } = req.body;
-    return res.json(sdp);
-  } catch (err) {
-    console.error("Error en WebRTC:", err);
-    return res.status(500).json({ message: "Error en WebRTC" });
-  }
+    // enviar historial de mensajes al unirse
+    socket.emit("chat-history", sessions[codigo].mensajes);
+  });
+
+  // --- mensajes del chat ---
+  socket.on("nuevo-mensaje", ({ codigo, nombre, mensaje }) => {
+    if (!sessions[codigo]) return;
+    const msg = { nombre, mensaje, hora: new Date().toLocaleTimeString() };
+    sessions[codigo].mensajes.push(msg);
+
+    // enviar mensaje solo a esa sala
+    io.to(codigo).emit("mensaje-chat", msg);
+  });
+
+  // --- intercambio de señalización webrtc ---
+  socket.on("offer", ({ codigo, offer }) => {
+    const session = sessions[codigo];
+    if (!session) return;
+    // enviar la oferta a todos los espectadores
+    socket.to(codigo).emit("webrtc-offer", { offer });
+  });
+
+  socket.on("answer", ({ codigo, answer }) => {
+    const session = sessions[codigo];
+    if (!session) return;
+    // enviar la respuesta al presentador
+    if (session.presentadorSocketId) {
+      io.to(session.presentadorSocketId).emit("webrtc-answer", { answer });
+    }
+  });
+
+  socket.on("candidate", ({ codigo, candidate }) => {
+    socket.to(codigo).emit("webrtc-candidate", { candidate });
+  });
+
+  // --- desconexión ---
+  socket.on("disconnect", () => {
+    console.log("cliente desconectado:", socket.id);
+    for (const codigo in sessions) {
+      const session = sessions[codigo];
+      if (session.presentadorSocketId === socket.id) {
+        console.log(`presentador salió de la sala ${codigo}`);
+        io.to(codigo).emit("presentador-desconectado");
+        delete sessions[codigo];
+      } else {
+        session.espectadores = session.espectadores.filter((id) => id !== socket.id);
+      }
+    }
+  });
 });
 
-// -------------------- COMMENTS --------------------
-app.post("/api/comments", async (req, res) => {
-  const { user, message } = req.body;
-
-  if (!user || !user.id || !user.nombre_completo) {
-    return res
-      .status(401)
-      .json({ message: "Debes iniciar sesión para comentar" });
-  }
-
-  if (!message || !message.trim()) {
-    return res.status(400).json({ message: "El mensaje no puede estar vacío" });
-  }
-
-  let comments = [];
-  if (fs.existsSync(commentsFile)) {
-    const data = fs.readFileSync(commentsFile, "utf-8");
-    comments = JSON.parse(data);
-  }
-
-  const newComment = {
-    id: comments.length + 1,
-    user: user.nombre_completo,
-    message,
-    timestamp: new Date().toISOString(),
-  };
-
-  comments.push(newComment);
-  fs.writeFileSync(commentsFile, JSON.stringify(comments, null, 2));
-
-  res.status(201).json(newComment);
-});
-
-app.get("/api/comments", (req, res) => {
-  if (!fs.existsSync(commentsFile)) {
-    return res.json([]);
-  }
-  const data = fs.readFileSync(commentsFile, "utf-8");
-  res.json(JSON.parse(data));
-});
-
-// -------------------- GENERAR PDF --------------------
+/* ==========================================================
+   ENDPOINT PARA GENERAR PDF DEL CHAT
+========================================================== */
 app.get("/api/generate-pdf", (req, res) => {
-  try {
-    if (!fs.existsSync(commentsFile)) {
-      return res
-        .status(404)
-        .json({ message: "No hay comentarios para generar PDF" });
-    }
-
-    const data = fs.readFileSync(commentsFile, "utf-8");
-    const comments = JSON.parse(data);
-
-    const doc = new PDFDocument();
-
-    res.setHeader(
-      "Content-Disposition",
-      'attachment; filename="reporte_comentarios.pdf"'
-    );
-    res.setHeader("Content-Type", "application/pdf");
-
-    doc.pipe(res);
-
-    doc
-      .fontSize(20)
-      .text("Reporte de Comentarios de Usuarios", { align: "center" });
-    doc.moveDown();
-
-    comments.forEach((comment, index) => {
-      // Eliminamos acentos y emojis para evitar símbolos raros
-      const cleanUser = comment.user
-        .normalize("NFD")
-        .replace(/[\u0300-\u036f]/g, "");
-      const cleanMsg = comment.message
-        .normalize("NFD")
-        .replace(/[\u0300-\u036f]/g, "");
-
-      doc
-        .fontSize(12)
-        .fillColor("#007acc")
-        .text(
-          `Usuario: ${cleanUser} (${new Date(
-            comment.timestamp
-          ).toLocaleString("es-MX")})`
-        )
-        .fillColor("black")
-        .text(`Mensaje: ${cleanMsg}`, { indent: 20 });
-
-      if (index < comments.length - 1) {
-        doc.moveDown(0.5);
-        doc
-          .strokeColor("#cccccc")
-          .lineWidth(1)
-          .moveTo(50, doc.y)
-          .lineTo(550, doc.y)
-          .stroke();
-        doc.moveDown(0.5);
-      }
-    });
-
-    doc.end();
-  } catch (error) {
-    console.error("Error al generar PDF:", error);
-    res.status(500).json({ message: "Error al generar el PDF" });
+  const codigo = req.query.codigo;
+  if (!codigo || !sessions[codigo]) {
+    return res.status(400).json({ error: "Código inválido" });
   }
+
+  const doc = new jsPDF();
+  doc.setFontSize(16);
+  doc.text(`Reporte de Comentarios - Sala ${codigo}`, 10, 10);
+
+  let y = 20;
+  sessions[codigo].mensajes.forEach((msg) => {
+    doc.setFontSize(12);
+    doc.text(`${msg.hora} - ${msg.nombre}: ${msg.mensaje}`, 10, y);
+    y += 10;
+    if (y > 270) {
+      doc.addPage();
+      y = 20;
+    }
+  });
+
+  const pdfBuffer = Buffer.from(doc.output("arraybuffer"));
+  res.setHeader("Content-Type", "application/pdf");
+  res.setHeader("Content-Disposition", `attachment; filename=reporte_${codigo}.pdf`);
+  res.send(pdfBuffer);
 });
 
-// -------------------- SERVER --------------------
-const PORT = process.env.PORT || 3001;
-app.listen(PORT, () => console.log(`✅ Server running on port ${PORT}`));
+/* ==========================================================
+   INICIAR SERVIDOR
+========================================================== */
+const PORT = 3001;
+server.listen(PORT, () => {
+  console.log(`Servidor corriendo en http://localhost:${PORT}`);
+});
