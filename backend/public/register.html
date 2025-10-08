@@ -34,11 +34,11 @@
     <form id="registerForm" class="register-form" onsubmit="return false;">
       <div class="column">
         <input id="firstName" type="text" placeholder="Nombres *" required>
-        <input id="institutionalEmail" type="email" placeholder="Matricula@merida.tecnm.mx *" required>
+        <input id="lastName" type="text" placeholder="Apellidos *" required>
 
         <!-- Campo contraseña -->
         <div class="password-wrapper">
-          <input id="password" type="password" placeholder="Contraseña *(minimo 8 caracteres)" required>
+          <input id="password" type="password" placeholder="Contraseña *(mínimo 8 caracteres, 1 mayúscula y 1 número)" required>
           <span id="togglePassword" class="toggle-password">ver</span>
         </div>
 
@@ -50,7 +50,8 @@
       </div>
 
       <div class="column">
-        <input id="lastName" type="text" placeholder="Apellidos *" required>
+        <input id="institutionalEmail" type="email" placeholder="Matricula@merida.tecnm.mx *" required>
+
         <input id="recoveryEmail" type="email" placeholder="Correo de recuperación *" required>
 
         <div class="role-toggle">
@@ -74,7 +75,7 @@
 const passwordRegex = /^(?=.*[A-Z])(?=.*\d).{8,}$/;
 const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-// Función para controlar mostrar/ocultar y auto-ocultar al salir
+// Función para mostrar/ocultar contraseña
 function setupPasswordToggle(inputId, toggleId) {
   const input = document.getElementById(inputId);
   const toggle = document.getElementById(toggleId);
@@ -83,24 +84,21 @@ function setupPasswordToggle(inputId, toggleId) {
     input.setAttribute('type', 'text');
     toggle.textContent = 'ocultar';
   });
-
   toggle.addEventListener('mouseup', () => {
     input.setAttribute('type', 'password');
     toggle.textContent = 'ver';
   });
-
   toggle.addEventListener('mouseleave', () => {
     input.setAttribute('type', 'password');
     toggle.textContent = 'ver';
   });
-
   input.addEventListener('blur', () => {
     input.setAttribute('type', 'password');
     toggle.textContent = 'ver';
   });
 }
 
-// Setup para ambos campos
+// Activar toggles
 setupPasswordToggle('password', 'togglePassword');
 setupPasswordToggle('confirmPassword', 'toggleConfirmPassword');
 
@@ -116,6 +114,7 @@ document.getElementById('signupBtn').addEventListener('click', async () => {
 
   let errores = [];
 
+  // Validaciones básicas
   if (!firstName) errores.push("Nombres");
   if (!lastName) errores.push("Apellidos");
   if (!institutionalEmail) errores.push("Correo institucional");
@@ -123,27 +122,19 @@ document.getElementById('signupBtn').addEventListener('click', async () => {
   if (!password) errores.push("Contraseña");
   if (!confirmPassword) errores.push("Confirmar contraseña");
 
-  // dominio institucional
+  // Validaciones específicas
   if (institutionalEmail && !institutionalEmail.endsWith("@merida.tecnm.mx")) {
     errores.push("El correo institucional debe terminar en @merida.tecnm.mx");
   }
-
-  // correos no iguales
   if (institutionalEmail && recoveryEmail && institutionalEmail === recoveryEmail) {
     errores.push("El correo de recuperación no puede ser igual al institucional");
   }
-
-  // correo recuperación válido
   if (recoveryEmail && !emailRegex.test(recoveryEmail)) {
     errores.push("El correo de recuperación no es válido");
   }
-
-  // validación de contraseña
   if (password && !passwordRegex.test(password)) {
     errores.push("La contraseña debe tener mínimo 8 caracteres, 1 mayúscula y 1 número.");
   }
-
-  // confirmar contraseña
   if (password && confirmPassword && password !== confirmPassword) {
     errores.push("Las contraseñas no coinciden.");
   }
@@ -153,10 +144,16 @@ document.getElementById('signupBtn').addEventListener('click', async () => {
   }
 
   try {
+    // Enviar al backend con nombres que espera app.js
     const res = await fetch('http://localhost:3001/api/register', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ firstName, lastName, institutionalEmail, recoveryEmail, password, role })
+      body: JSON.stringify({ 
+        nombre_completo: firstName + " " + lastName,
+        correo: institutionalEmail,
+        password: password,
+        id_rol: role === "student" ? 2 : 1
+      })
     });
 
     const data = await res.json();
