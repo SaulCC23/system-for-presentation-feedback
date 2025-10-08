@@ -5,42 +5,12 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Vista del Espectador</title>
   <link rel="stylesheet" href="dashboard_espectadores.css" />
+  <script src="/socket.io/socket.io.js"></script>
   <style>
-    .share {
-      padding: 0.6rem 1rem;
-      border: none;
-      border-radius: 5px;
-      cursor: pointer;
-      background-color: #2196F3;
-      color: white;
-      margin-top: 0.5rem;
-      font-weight: 600;
-    }
-    .share:hover { opacity: 0.8; }
-
-    .chat-input input {
-      width: calc(100% - 50px);
-      padding: 0.5rem;
-      font-size: 1rem;
-      border-radius: 5px;
-      border: 1px solid #ccc;
-    }
-
-    .chat-input button {
-      padding: 0.5rem;
-      margin-left: 5px;
-      border: none;
-      border-radius: 5px;
-      cursor: pointer;
-      background-color: #4CAF50;
-      color: white;
-      font-weight: 600;
-    }
-
-    .chat-input button:disabled {
-      opacity: 0.5;
-      cursor: not-allowed;
-    }
+    .share { padding: 0.6rem 1rem; border: none; border-radius: 5px; cursor: pointer; background-color: #2196F3; color: white; margin-top: 0.5rem; font-weight: 600; }
+    .chat-input input { width: calc(100% - 50px); padding: 0.5rem; font-size: 1rem; border-radius: 5px; border: 1px solid #ccc; }
+    .chat-input button { padding: 0.5rem; margin-left: 5px; border: none; border-radius: 5px; cursor: pointer; background-color: #4CAF50; color: white; font-weight: 600; }
+    .chat-input button:disabled { opacity: 0.5; cursor: not-allowed; }
   </style>
 </head>
 <body>
@@ -49,6 +19,7 @@
       <h2>PRESENTACIÓN EN VIVO</h2>
       <div class="slide">
         <video id="liveVideo" autoplay playsinline controls></video>
+        <div id="no-stream-message" style="color: red; padding: 20px; text-align: center; display: block;">Esperando al presentador...</div>
       </div>
     </div>
 
@@ -59,17 +30,11 @@
       </p>
       <button id="copy-code-btn" class="share">🔗 Compartir código</button>
 
-      <!-- <div class="reacciones">
-        <h4>REACCIONES RÁPIDAS</h4>
-        <button class="like">¡ME GUSTA!</button>
-        <button class="dislike">PODRÍA MEJORAR</button>
-      </div> -->
-
       <div class="comentarios-rapidos">
         <h4>COMENTARIOS RÁPIDOS</h4>
-        <button class="quick-comment">¡Gran punto!</button>
-        <button class="quick-comment">Muy clara la explicación.</button>
-        <button class="quick-comment">Me gusta el gráfico.</button>
+        <button class="quick-comment" disabled>¡Gran punto!</button>
+        <button class="quick-comment" disabled>Muy clara la explicación.</button>
+        <button class="quick-comment" disabled>Me gusta el gráfico.</button>
       </div>
 
       <div class="chat">
@@ -80,122 +45,157 @@
           <button id="send-btn" disabled>➤</button>
         </div>
         <div id="chat-warning" style="display:none; color:red; font-size:0.9em; margin-top:5px">
-          Necesitas una cuenta para comentar.
+          Necesitas iniciar sesión para comentar.
         </div>
       </div>
     </div>
   </div>
 
 <script>
-  // ---------------- SESIÓN ----------------
+  // ---------- INICIALIZACIÓN ----------
+  const socket = io("http://localhost:3001");
   const user = JSON.parse(localStorage.getItem("user"));
-  const sessionCode =
-    new URLSearchParams(window.location.search).get("code") ||
-    localStorage.getItem("sessionCode") ||
-    "N/A";
-  document.getElementById("session-code").textContent = sessionCode;
+  
+  const sessionCode = new URLSearchParams(window.location.search).get("code");
+  const videoElement = document.getElementById("liveVideo");
+  const noStreamMessage = document.getElementById("no-stream-message");
+  
+  document.getElementById("session-code").textContent = sessionCode || "ERROR";
 
-  // ---------------- COPIAR CÓDIGO ----------------
-  document.getElementById("copy-code-btn").addEventListener("click", () => {
-    if (!sessionCode || sessionCode === "N/A") return alert("No hay código de sesión disponible.");
-    navigator.clipboard.writeText(sessionCode)
-      .then(() => alert(`Código copiado: ${sessionCode}`))
-      .catch(err => {
-        console.error("Error copiando el código:", err);
-        alert("No se pudo copiar el código.");
-      });
-  });
+  if (!sessionCode) {
+    window.location.href = "dashboard_alumno.html";
+  }
 
-  // ---------------- CHAT Y FEEDBACK ----------------
+  // --- CONFIGURACIÓN DE CHAT ---
   const chatInput = document.getElementById("chat-input");
   const sendBtn = document.getElementById("send-btn");
   const chatWarning = document.getElementById("chat-warning");
   const quickComments = document.querySelectorAll(".quick-comment");
-  const reactions = document.querySelectorAll(".like, .dislike");
+  const chatMessagesEl = document.getElementById("chat-messages");
+  
+  let pc; // RTCPeerConnection
 
+  // Habilitar chat si el usuario está logueado
   if (user) {
     chatInput.disabled = false;
     sendBtn.disabled = false;
     quickComments.forEach(btn => btn.disabled = false);
-    reactions.forEach(btn => btn.disabled = false);
     chatWarning.style.display = "none";
   } else {
-    chatInput.disabled = true;
-    sendBtn.disabled = true;
-    quickComments.forEach(btn => btn.disabled = true);
-    reactions.forEach(btn => btn.disabled = true);
     chatWarning.style.display = "block";
   }
 
-  const chatMessages = document.getElementById("chat-messages");
+  // --- CONEXIÓN SOCKET.IO ---
+  socket.emit("join-session", { 
+    codigo: sessionCode, 
+    rol: "espectador", 
+    nombre: user ? user.nombre_completo : "Anónimo"
+  }, (response) => {
+      if (!response.success) {
+          alert(`Error al unirse: ${response.message}`);
+          window.location.href = "dashboard_alumno.html";
+      }
+  });
 
-  async function loadComments() {
-    try {
-      const res = await fetch("http://localhost:3001/api/comments");
-      const comments = await res.json();
-      chatMessages.innerHTML = comments
-        .map(c => `<p><strong>${c.user.nombre_completo || c.user}:</strong> ${c.message}</p>`)
-        .join("");
-      chatMessages.scrollTop = chatMessages.scrollHeight;
-    } catch (err) {
-      console.error("Error cargando comentarios:", err);
-    }
+  // --- MANEJO DE CHAT (SOCKET.IO) ---
+  function addChatMessage(msg) {
+    const p = document.createElement("p");
+    p.innerHTML = `<strong>[${msg.hora}] ${msg.nombre}:</strong> ${msg.mensaje}`;
+    chatMessagesEl.appendChild(p);
+    chatMessagesEl.scrollTop = chatMessagesEl.scrollHeight;
   }
 
-  async function sendComment(message) {
-    if (!user) return alert("Debes iniciar sesión para comentar.");
+  function sendComment(message) {
+    if (!user) return; // Solo usuarios logueados pueden comentar
     if (!message.trim()) return;
 
-    try {
-      await fetch("http://localhost:3001/api/comments", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ user, message })
-      });
-      chatInput.value = "";
-      loadComments();
-    } catch (err) {
-      console.error("Error enviando comentario:", err);
-    }
+    socket.emit("nuevo-mensaje", {
+      codigo: sessionCode,
+      nombre: user.nombre_completo,
+      mensaje: message
+    });
+    chatInput.value = "";
   }
+  
+  // Recibir historial y nuevos mensajes
+  socket.on("chat-history", (messages) => {
+    chatMessagesEl.innerHTML = "";
+    messages.forEach(addChatMessage);
+  });
+  socket.on("mensaje-chat", addChatMessage);
 
   sendBtn.addEventListener("click", () => sendComment(chatInput.value));
   chatInput.addEventListener("keydown", (e) => {
     if (e.key === "Enter") sendComment(chatInput.value);
   });
-
   quickComments.forEach(btn => {
     btn.addEventListener("click", () => sendComment(btn.textContent));
   });
 
-  // Recargar comentarios cada 3s
-  loadComments();
-  setInterval(loadComments, 3000);
+  // --- HANDLERS DE SESIÓN ---
+  socket.on("session-ended", (data) => {
+      alert(`La sesión ha finalizado: ${data ? data.reason : "El presentador se desconectó."}`);
+      window.location.href = "dashboard_alumno.html";
+  });
 
-  // ---------------- VIDEO (WebRTC) ----------------
-  const videoElement = document.getElementById("liveVideo");
 
-  async function initWebRTC() {
-    const pc = new RTCPeerConnection();
+  // --- WEBRTC (RECEPCIÓN) ---
+  
+  // Evento: Recibir señalización del presentador (Offer o Candidate)
+  socket.on("signal", async ({ from, signal }) => {
+      if (signal.type === 'offer') {
+          if (pc) pc.close(); 
+          
+          pc = new RTCPeerConnection();
+          
+          // 1. Mostrar el video remoto cuando se reciben las pistas
+          pc.ontrack = (event) => {
+            videoElement.srcObject = event.streams[0];
+            noStreamMessage.style.display = 'none';
+          };
+          
+          // 2. Manejo de candidatos ICE (enviarlos al presentador)
+          pc.onicecandidate = ({ candidate }) => {
+              if (candidate) {
+                  socket.emit("signal", {
+                      codigo: sessionCode, 
+                      to: from, 
+                      signal: { type: 'candidate', candidate } 
+                  });
+              }
+          };
 
-    pc.ontrack = (event) => {
-      videoElement.srcObject = event.streams[0];
-    };
+          // 3. Establecer la Offer, crear y enviar la Answer
+          await pc.setRemoteDescription(new RTCSessionDescription(signal.offer));
+          const answer = await pc.createAnswer();
+          await pc.setLocalDescription(answer);
 
-    const offer = await fetch("http://localhost:3001/webrtc-offer").then(res => res.json());
-    await pc.setRemoteDescription(new RTCSessionDescription(offer));
+          socket.emit("signal", { 
+              codigo: sessionCode, 
+              to: from, 
+              signal: { type: 'answer', answer: pc.localDescription }
+          });
 
-    const answer = await pc.createAnswer();
-    await pc.setLocalDescription(answer);
+      } else if (signal.type === 'candidate' && pc) {
+          // 4. Recibir candidato ICE del presentador
+          try {
+              await pc.addIceCandidate(signal.candidate);
+          } catch (e) {
+              console.error('Error al agregar candidato ICE:', e);
+          }
+      }
+  });
 
-    await fetch("http://localhost:3001/webrtc-answer", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ sdp: pc.localDescription })
-    });
-  }
 
-  initWebRTC().catch(console.error);
+  // --- OTROS EVENT LISTENERS ---
+  document.getElementById("copy-code-btn").addEventListener("click", () => {
+    if (!sessionCode) return;
+    navigator.clipboard.writeText(sessionCode).then(() => alert(`Código copiado: ${sessionCode}`));
+  });
+
+  window.addEventListener('beforeunload', () => {
+      socket.close(); 
+  });
 </script>
 </body>
 </html>

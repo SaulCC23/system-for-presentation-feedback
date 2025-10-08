@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Vista del Presentador</title>
+    <link rel="stylesheet" href="dashboard_presentador.css" />
+    <script src="/socket.io/socket.io.js"></script> 
+  </head>
+
+  <body>
+    <div class="container">
+      <div class="presentacion">
+        <h1>Bienvenido</h1>
+
+        <div class="slide">
+          <video id="preview" autoplay playsinline muted></video>
+        </div>
+
+        <div class="controles">
+          <button id="start-btn">Transmite tu cámara</button>
+          <button id="stop-btn" disabled>Dejar de transmitir</button>
+          <button id="share-screen" disabled>Compartir Pantalla</button>
+        </div>
+      </div>
+
+      <div class="feedback">
+        <h3>HERRAMIENTAS DEL PRESENTADOR</h3>
+        <p class="codigo">
+          CÓDIGO DE SESIÓN: <strong id="session-code">N/A</strong>
+        </p>
+        <button class="share" id="copy-code">Copiar código</button>
+
+        <button class="reporte" id="download-pdf-btn">
+          Descargar Reporte (PDF) 📄
+        </button>
+
+        <div class="estado">
+          <h4>ESTADO DE TRANSMISIÓN</h4>
+          <p id="status">Conectando...</p>
+        </div>
+
+        <div class="chat">
+          <h4>CHAT DE ESPECTADORES</h4>
+          <div id="chat-messages" class="chat-messages"></div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      // ---------- INICIALIZACIÓN ----------
+      const socket = io("http://localhost:3001");
+      const user = JSON.parse(localStorage.getItem("user"));
+      const API_BASE_URL = "http://localhost:3001";
+      
+      const sessionCode = new URLSearchParams(window.location.search).get("code"); 
+      const chatMessagesEl = document.getElementById("chat-messages");
+      const video = document.getElementById("preview");
+      const startBtn = document.getElementById("start-btn");
+      const stopBtn = document.getElementById("stop-btn");
+      const shareBtn = document.getElementById("share-screen");
+      const statusEl = document.getElementById("status");
+      
+      let peerConnections = new Map(); // RTCPeerConnections (uno por espectador)
+      let localStream;
+
+      // ---------- VALIDACIÓN Y CONEXIÓN DE SALA ----------
+      if (!user || user.rol !== 1 || !sessionCode || !/^\d{6}$/.test(sessionCode)) {
+        alert("Acceso no autorizado o código faltante/inválido.");
+        window.location.href = "dashboard_profesor.html";
+      } else {
+        document.getElementById("session-code").textContent = sessionCode;
+
+        // 1. Unirse a la sala de Socket.io como presentador
+        socket.emit("join-session", { 
+          codigo: sessionCode, 
+          rol: "presentador", 
+          nombre: user.nombre_completo 
+        }, (response) => {
+          if (response.success) {
+            statusEl.textContent = "Conectado. Presiona 'Transmite tu cámara' para iniciar.";
+          } else {
+            alert(`Error al unirse: ${response.message}`);
+            window.location.href = "dashboard_profesor.html";
+          }
+        });
+      }
+
+      // ---------- FUNCIONES DE CHAT Y PDF ----------
+      function addChatMessage(msg) {
+        const p = document.createElement("p");
+        p.innerHTML = `<strong>[${msg.hora}] ${msg.nombre}:</strong> ${msg.mensaje}`;
+        chatMessagesEl.appendChild(p);
+        chatMessagesEl.scrollTop = chatMessagesEl.scrollHeight;
+      }
+
+      // Recibir historial de chat al unirse
+      socket.on("chat-history", (messages) => {
+        chatMessagesEl.innerHTML = "";
+        messages.forEach(addChatMessage);
+      });
+      // Recibir nuevos mensajes en tiempo real
+      socket.on("mensaje-chat", addChatMessage);
+
+      // Descargar PDF
+      document.getElementById("download-pdf-btn").addEventListener("click", async () => {
+          const pdfUrl = `${API_BASE_URL}/api/generate-pdf?codigo=${sessionCode}`;
+          try {
+            const response = await fetch(pdfUrl);
+            if (!response.ok) throw new Error(`Error ${response.status}`);
+
+            const blob = await response.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = `reporte_chat_${sessionCode}.pdf`; 
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            window.URL.revokeObjectURL(url);
+          } catch (error) {
+            console.error("Error al descargar el PDF:", error);
+            alert("Ocurrió un error al descargar el reporte (verifique que haya mensajes y que el servidor esté listo).");
+          }
+      });
+      
+      // ---------- WEBRTC (TRANSMISIÓN) ----------
+      
+      // Evento: El servidor nos avisa que un espectador nos ha enviado una Answer o Candidate
+      socket.on("signal", async ({ from, signal }) => {
+          if (signal.type === 'answer') {
+              const pc = peerConnections.get(from);
+              if (pc) {
+                  await pc.setRemoteDescription(new RTCSessionDescription(signal.answer));
+              }
+          } else if (signal.type === 'candidate') {
+              const pc = peerConnections.get(from);
+              if (pc && signal.candidate) {
+                  try {
+                      await pc.addIceCandidate(signal.candidate);
+                  } catch (e) {
+                      console.error('Error al agregar candidato ICE:', e);
+                  }
+              }
+          }
+      });
+
+      // Función para configurar y enviar una Offer a un espectador
+      async function createAndSendOffer(viewerSocketId) {
+          const pc = new RTCPeerConnection();
+          peerConnections.set(viewerSocketId, pc);
+
+          localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
+
+          pc.onicecandidate = ({ candidate }) => {
+              if (candidate) {
+                  socket.emit("signal", {
+                      codigo: sessionCode, 
+                      to: viewerSocketId, 
+                      signal: { type: 'candidate', candidate } 
+                  });
+              }
+          };
+
+          const offer = await pc.createOffer();
+          await pc.setLocalDescription(offer);
+
+          socket.emit("signal", {
+              codigo: sessionCode, 
+              to: viewerSocketId, 
+              signal: { type: 'offer', offer: pc.localDescription }
+          });
+      }
+
+      // Evento: Un nuevo espectador se unió a la sala. Enviar Offer si ya estamos transmitiendo.
+      socket.on("user-joined", ({ id, rol }) => {
+          if (rol !== "presentador" && localStream) {
+              createAndSendOffer(id);
+          }
+      });
+      
+      // Evento: Un espectador se fue.
+      socket.on("user-left", ({ id }) => {
+          const pc = peerConnections.get(id);
+          if (pc) {
+              pc.close();
+              peerConnections.delete(id);
+          }
+      });
+
+      // ----- CONTROL DE STREAM LOCAL -----
+
+      async function startStream(source = 'camera') {
+        stopStream(false); 
+
+        try {
+          if (source === 'camera') {
+            localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+            shareBtn.disabled = false;
+          } else { // 'screen'
+            localStream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
+            localStream.getVideoTracks()[0].onended = () => {
+                if (video.srcObject === localStream) startStream('camera'); 
+            };
+          }
+
+          video.srcObject = localStream;
+          statusEl.textContent = "Transmitiendo en vivo";
+          startBtn.disabled = true;
+          stopBtn.disabled = false;
+          shareBtn.disabled = (source !== 'camera');
+
+          // Si ya hay espectadores, re-iniciar conexiones con el nuevo stream
+          peerConnections.forEach((pc, id) => { pc.close(); });
+          peerConnections.clear();
+          // El 'user-joined' ya disparará el envío de Offers a quienes estén conectados.
+          socket.emit("stream-started", { codigo: sessionCode }); 
+
+        } catch (err) {
+          statusEl.textContent = "Error al iniciar transmisión";
+          startBtn.disabled = false;
+          stopBtn.disabled = true;
+          shareBtn.disabled = true;
+        }
+      }
+
+      function stopStream(endSession = true) {
+        if (localStream) {
+          localStream.getTracks().forEach(track => track.stop());
+          localStream = null;
+        }
+
+        video.srcObject = null;
+        peerConnections.forEach(pc => pc.close());
+        peerConnections.clear();
+
+        statusEl.textContent = "Transmisión detenida";
+        startBtn.disabled = false;
+        stopBtn.disabled = true;
+        shareBtn.disabled = true;
+        
+        if (endSession) {
+            // Notificar al servidor y a los espectadores que la sesión terminó.
+            socket.emit("end-session", { codigo: sessionCode, reason: "Manual closure" });
+            localStorage.removeItem('sessionCode');
+            window.location.href = "dashboard_profesor.html"; 
+        }
+      }
+
+      // EVENT LISTENERS DE BOTONES
+      startBtn.addEventListener("click", () => startStream('camera'));
+      stopBtn.addEventListener("click", () => stopStream(true));
+      shareBtn.addEventListener("click", () => startStream('screen'));
+      
+      document.getElementById("copy-code").addEventListener("click", () => {
+        navigator.clipboard.writeText(sessionCode).then(() => alert("Código copiado: " + sessionCode));
+      });
+
+      // Cerrar conexión Socket.io al salir de la página
+      window.addEventListener('beforeunload', () => {
+          socket.close(); 
+      });
+    </script>
+  </body>
+</html>

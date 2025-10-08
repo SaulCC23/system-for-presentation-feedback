@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Vista del Espectador</title>
+  <link rel="stylesheet" href="dashboard_espectadores.css" />
+  <script src="/socket.io/socket.io.js"></script>
+  <style>
+    .share { padding: 0.6rem 1rem; border: none; border-radius: 5px; cursor: pointer; background-color: #2196F3; color: white; margin-top: 0.5rem; font-weight: 600; }
+    .chat-input input { width: calc(100% - 50px); padding: 0.5rem; font-size: 1rem; border-radius: 5px; border: 1px solid #ccc; }
+    .chat-input button { padding: 0.5rem; margin-left: 5px; border: none; border-radius: 5px; cursor: pointer; background-color: #4CAF50; color: white; font-weight: 600; }
+    .chat-input button:disabled { opacity: 0.5; cursor: not-allowed; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="presentacion">
+      <h2>PRESENTACIÓN EN VIVO</h2>
+      <div class="slide">
+        <video id="liveVideo" autoplay playsinline controls></video>
+        <div id="no-stream-message" style="color: red; padding: 20px; text-align: center; display: block;">Esperando al presentador...</div>
+      </div>
+    </div>
+
+    <div class="feedback">
+      <h3>FEEDBACK EN VIVO</h3>
+      <p class="codigo">
+        CÓDIGO DE SESIÓN: <strong id="session-code"></strong>
+      </p>
+      <button id="copy-code-btn" class="share">🔗 Compartir código</button>
+
+      <div class="comentarios-rapidos">
+        <h4>COMENTARIOS RÁPIDOS</h4>
+        <button class="quick-comment" disabled>¡Gran punto!</button>
+        <button class="quick-comment" disabled>Muy clara la explicación.</button>
+        <button class="quick-comment" disabled>Me gusta el gráfico.</button>
+      </div>
+
+      <div class="chat">
+        <h4>CHAT</h4>
+        <div id="chat-messages" class="chat-messages"></div>
+        <div class="chat-input">
+          <input type="text" id="chat-input" placeholder="Escribe tu comentario..." disabled />
+          <button id="send-btn" disabled>➤</button>
+        </div>
+        <div id="chat-warning" style="display:none; color:red; font-size:0.9em; margin-top:5px">
+          Necesitas iniciar sesión para comentar.
+        </div>
+      </div>
+    </div>
+  </div>
+
+<script>
+  // ---------- INICIALIZACIÓN ----------
+  const socket = io("http://localhost:3001");
+  const user = JSON.parse(localStorage.getItem("user"));
+  
+  const sessionCode = new URLSearchParams(window.location.search).get("code");
+  const videoElement = document.getElementById("liveVideo");
+  const noStreamMessage = document.getElementById("no-stream-message");
+  
+  document.getElementById("session-code").textContent = sessionCode || "ERROR";
+
+  if (!sessionCode) {
+    window.location.href = "dashboard_alumno.html";
+  }
+
+  // --- CONFIGURACIÓN DE CHAT ---
+  const chatInput = document.getElementById("chat-input");
+  const sendBtn = document.getElementById("send-btn");
+  const chatWarning = document.getElementById("chat-warning");
+  const quickComments = document.querySelectorAll(".quick-comment");
+  const chatMessagesEl = document.getElementById("chat-messages");
+  
+  let pc; // RTCPeerConnection
+
+  // Habilitar chat si el usuario está logueado
+  if (user) {
+    chatInput.disabled = false;
+    sendBtn.disabled = false;
+    quickComments.forEach(btn => btn.disabled = false);
+    chatWarning.style.display = "none";
+  } else {
+    chatWarning.style.display = "block";
+  }
+
+  // --- CONEXIÓN SOCKET.IO ---
+  socket.emit("join-session", { 
+    codigo: sessionCode, 
+    rol: "espectador", 
+    nombre: user ? user.nombre_completo : "Anónimo"
+  }, (response) => {
+      if (!response.success) {
+          alert(`Error al unirse: ${response.message}`);
+          window.location.href = "dashboard_alumno.html";
+      }
+  });
+
+  // --- MANEJO DE CHAT (SOCKET.IO) ---
+  function addChatMessage(msg) {
+    const p = document.createElement("p");
+    p.innerHTML = `<strong>[${msg.hora}] ${msg.nombre}:</strong> ${msg.mensaje}`;
+    chatMessagesEl.appendChild(p);
+    chatMessagesEl.scrollTop = chatMessagesEl.scrollHeight;
+  }
+
+  function sendComment(message) {
+    if (!user) return; // Solo usuarios logueados pueden comentar
+    if (!message.trim()) return;
+
+    socket.emit("nuevo-mensaje", {
+      codigo: sessionCode,
+      nombre: user.nombre_completo,
+      mensaje: message
+    });
+    chatInput.value = "";
+  }
+  
+  // Recibir historial y nuevos mensajes
+  socket.on("chat-history", (messages) => {
+    chatMessagesEl.innerHTML = "";
+    messages.forEach(addChatMessage);
+  });
+  socket.on("mensaje-chat", addChatMessage);
+
+  sendBtn.addEventListener("click", () => sendComment(chatInput.value));
+  chatInput.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") sendComment(chatInput.value);
+  });
+  quickComments.forEach(btn => {
+    btn.addEventListener("click", () => sendComment(btn.textContent));
+  });
+
+  // --- HANDLERS DE SESIÓN ---
+  socket.on("session-ended", (data) => {
+      alert(`La sesión ha finalizado: ${data ? data.reason : "El presentador se desconectó."}`);
+      window.location.href = "dashboard_alumno.html";
+  });
+
+
+  // --- WEBRTC (RECEPCIÓN) ---
+  
+  // Evento: Recibir señalización del presentador (Offer o Candidate)
+  socket.on("signal", async ({ from, signal }) => {
+      if (signal.type === 'offer') {
+          if (pc) pc.close(); 
+          
+          pc = new RTCPeerConnection();
+          
+          // 1. Mostrar el video remoto cuando se reciben las pistas
+          pc.ontrack = (event) => {
+            videoElement.srcObject = event.streams[0];
+            noStreamMessage.style.display = 'none';
+          };
+          
+          // 2. Manejo de candidatos ICE (enviarlos al presentador)
+          pc.onicecandidate = ({ candidate }) => {
+              if (candidate) {
+                  socket.emit("signal", {
+                      codigo: sessionCode, 
+                      to: from, 
+                      signal: { type: 'candidate', candidate } 
+                  });
+              }
+          };
+
+          // 3. Establecer la Offer, crear y enviar la Answer
+          await pc.setRemoteDescription(new RTCSessionDescription(signal.offer));
+          const answer = await pc.createAnswer();
+          await pc.setLocalDescription(answer);
+
+          socket.emit("signal", { 
+              codigo: sessionCode, 
+              to: from, 
+              signal: { type: 'answer', answer: pc.localDescription }
+          });
+
+      } else if (signal.type === 'candidate' && pc) {
+          // 4. Recibir candidato ICE del presentador
+          try {
+              await pc.addIceCandidate(signal.candidate);
+          } catch (e) {
+              console.error('Error al agregar candidato ICE:', e);
+          }
+      }
+  });
+
+
+  // --- OTROS EVENT LISTENERS ---
+  document.getElementById("copy-code-btn").addEventListener("click", () => {
+    if (!sessionCode) return;
+    navigator.clipboard.writeText(sessionCode).then(() => alert(`Código copiado: ${sessionCode}`));
+  });
+
+  window.addEventListener('beforeunload', () => {
+      socket.close(); 
+  });
+</script>
+</body>
+</html>

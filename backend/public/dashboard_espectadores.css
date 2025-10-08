@@ -1,0 +1,198 @@
+
+body {
+  font-family: Arial, sans-serif;
+  background: #0f172a; 
+  color: #fff;
+  margin: 0;
+  padding: 20px;
+  height: 100vh;
+  display: flex;
+  justify-content: center;
+  align-items: stretch;
+}
+
+
+.container {
+  display: flex;
+  gap: 20px;
+  width: 100%;
+  height: 100%;
+}
+
+
+.presentacion {
+  flex: 2;
+  background: #1e293b; 
+  padding: 20px;
+  border-radius: 16px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+  display: flex;
+  flex-direction: column;
+}
+
+.presentacion h2 {
+  margin-bottom: 10px;
+  color: #3b82f6; 
+  font-weight: bold;
+}
+
+.slide {
+  flex: 1;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.slide video {
+  width: 100%;
+  height: 100%;
+  border-radius: 12px;
+  object-fit: contain;
+  background: black;
+}
+
+
+.feedback {
+  flex: 1;
+  background: #1e293b;
+  padding: 20px;
+  border-radius: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+  overflow-y: auto;
+}
+
+.feedback h3 {
+  margin: 0;
+  color: #ec4899; 
+}
+
+.codigo {
+  font-size: 14px;
+  color: #fcd34d; 
+}
+
+
+.share {
+  background: linear-gradient(90deg, #3b82f6, #9333ea);
+  border: none;
+  padding: 10px;
+  border-radius: 8px;
+  color: white;
+  cursor: pointer;
+  transition: transform 0.2s ease;
+  font-weight: bold;
+}
+
+.share:hover {
+  transform: scale(1.05);
+}
+
+
+.reacciones h4 {
+  color: #22c55e; 
+}
+
+.reacciones button {
+  font-size: 20px;
+  margin: 5px;
+  padding: 12px 16px;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: transform 0.2s ease;
+}
+
+.reacciones button:hover {
+  transform: scale(1.1);
+}
+
+.like {
+  background: #22c55e;
+  color: #fff;
+}
+
+.dislike {
+  background: #ef4444;
+  color: #fff;
+}
+
+
+.comentarios-rapidos h4 {
+  color: #3b82f6;
+}
+
+.comentarios-rapidos button {
+  display: block;
+  margin: 5px 0;
+  padding: 10px;
+  width: 100%;
+  background: #334155;
+  border: none;
+  border-radius: 8px;
+  color: #fff;
+  cursor: pointer;
+  transition: background 0.3s ease;
+}
+
+.comentarios-rapidos button:hover {
+  background: #475569;
+  color: #fcd34d; 
+}
+
+
+.chat {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.chat h4 {
+  color: #9333ea; 
+}
+
+.chat-messages {
+  background: rgba(15, 23, 42, 0.8);
+  padding: 10px;
+  flex: 1;
+  overflow-y: auto;
+  border-radius: 8px;
+  margin-bottom: 10px;
+}
+
+.chat-messages p {
+  background: #334155;
+  padding: 6px 10px;
+  border-radius: 6px;
+  margin: 5px 0;
+  color: #fff;
+}
+
+.chat-input {
+  display: flex;
+  gap: 5px;
+}
+
+.chat-input input {
+  flex: 1;
+  padding: 8px;
+  border-radius: 8px;
+  border: none;
+  outline: none;
+}
+
+.chat-input button {
+  background: linear-gradient(90deg, #3b82f6, #ec4899);
+  border: none;
+  padding: 8px 12px;
+  border-radius: 8px;
+  color: white;
+  cursor: pointer;
+  transition: transform 0.2s ease;
+}
+
+.chat-input button:hover {
+  transform: scale(1.05);
+}
