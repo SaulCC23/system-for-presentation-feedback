@@ -23,6 +23,12 @@ const sessionRepo = new InMemorySessionRepository();
 const sessionService = new SessionService(sessionRepo);
 
 // ----------------------------------------------------------------
+// INTEGRACIÓN DEL SERVICIO DE RECUPERACIÓN DE CONTRASEÑA
+// ----------------------------------------------------------------
+const { recoverPassword } = require("./passwordRecoveryController");
+
+
+// ----------------------------------------------------------------
 // CONFIGURACIÓN DEL SERVIDOR EXPRESS + SOCKET.IO
 // ----------------------------------------------------------------
 const app = express();
@@ -122,6 +128,11 @@ app.post("/api/register", async (req, res) => {
     res.status(500).json({ message: "Error interno del servidor" });
   }
 });
+
+
+/* ENPOINT DE RECUPERACIÓN DE CONTRASEÑA */
+app.post("/api/recover-password", recoverPassword);
+
 
 // ----------------------------------------------------------------
 // RUTAS DE SESIONES Y CHAT
