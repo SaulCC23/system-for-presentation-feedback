@@ -1,11 +1,21 @@
 // passwordRecoveryService.js
 const nodemailer = require("nodemailer");
+const bcrypt = require("bcryptjs");
+const mysql = require("mysql2/promise");
 require("dotenv").config();
 
-// Almacenamiento temporal en memoria (clave = email)
+// Almacenamiento temporal en memoria (clave = userId)
 const temporaryPasswords = new Map();
 
-// Genera una contraseña temporal de 8 caracteres con mayúsculas, minúsculas y números
+// Conexión a la base de datos
+const db = mysql.createPool({
+  host: "localhost",
+  user: "root",
+  password: "",
+  database: "peer_review",
+});
+
+// Genera una contraseña temporal de 8 caracteres
 function generateTemporaryPassword() {
   const uppercase = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
   const lowercase = "abcdefghijklmnopqrstuvwxyz";
@@ -29,22 +39,25 @@ function generateTemporaryPassword() {
 }
 
 // Guarda la contraseña temporal para un usuario (válida 10 minutos)
-function saveTemporaryPassword(email, password) {
+async function saveTemporaryPassword(userId, password) {
+  const hashed = await bcrypt.hash(password, 10);
   const expiresAt = Date.now() + 10 * 60 * 1000; // 10 minutos
-  temporaryPasswords.set(email, { password, expiresAt });
+
+  temporaryPasswords.set(userId, { passwordHash: hashed, expiresAt });
   console.log(`🕒 Contraseña temporal válida hasta: ${new Date(expiresAt).toLocaleTimeString()}`);
+
+  // Guardar la contraseña temporal en la DB para login
+  await db.query("UPDATE usuarios SET contrasena = ? WHERE id_usuario = ?", [hashed, userId]);
 }
 
 // Verifica si la contraseña temporal sigue siendo válida
-function isTemporaryPasswordValid(email, password) {
-  const entry = temporaryPasswords.get(email);
+function isTemporaryPasswordValid(userId) {
+  const entry = temporaryPasswords.get(userId);
   if (!entry) return false;
 
-  const { password: stored, expiresAt } = entry;
-  const stillValid = stored === password && Date.now() < expiresAt;
-  if (!stillValid) {
-    temporaryPasswords.delete(email); // Limpia expirados automáticamente
-  }
+  const { expiresAt } = entry;
+  const stillValid = Date.now() < expiresAt;
+  if (!stillValid) temporaryPasswords.delete(userId);
   return stillValid;
 }
 
@@ -68,9 +81,9 @@ async function sendRecoveryEmail(email, temporaryPassword) {
       html: `
         <h2>🔐 Recuperación de contraseña</h2>
         <p>Hemos recibido tu solicitud para recuperar tu contraseña.</p>
-        <p>Te enviamos la siguiente <strong>contraseña temporal</strong> para que puedas acceder y cambiarla por una nueva y más segura:</p>
+        <p>Tu <strong>contraseña temporal</strong> es:</p>
         <p style="font-size: 18px; font-weight: bold;">${temporaryPassword}</p>
-        <p>Por seguridad, esta contraseña expirará en <b>10 minutos</b>.</p>
+        <p>Esta contraseña expirará en <b>10 minutos</b>.</p>
       `,
     };
 
@@ -83,7 +96,6 @@ async function sendRecoveryEmail(email, temporaryPassword) {
   }
 }
 
-// Exportamos todas las funciones en CommonJS
 module.exports = {
   generateTemporaryPassword,
   saveTemporaryPassword,

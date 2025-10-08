@@ -48,34 +48,54 @@ const {
   generateTemporaryPassword,
   sendRecoveryEmail,
   saveTemporaryPassword,
+  isTemporaryPasswordValid,
 } = require("./passwordRecoveryService");
 
 // Endpoint POST /recover-password
 app.post("/api/recover-password", async (req, res) => {
-  const { email } = req.body || {};
+  const { correo_recuperacion } = req.body || {};
 
-  if (!email) {
-    return res.status(400).json({ error: "El correo electrónico es requerido." });
+  if (!correo_recuperacion) {
+    return res.status(400).json({ error: "El correo de recuperación es requerido." });
   }
 
   try {
-    const tempPassword = generateTemporaryPassword();
-    saveTemporaryPassword(email, tempPassword);
+    // Buscar usuario por correo de recuperación
+    const [rows] = await db.query(
+      "SELECT * FROM usuarios WHERE correo_recuperacion = ?",
+      [correo_recuperacion]
+    );
 
-    const sent = await sendRecoveryEmail(email, tempPassword);
-
-    if (!sent) {
-      return res.status(500).json({ error: "No se pudo enviar el correo." });
+    if (rows.length === 0) {
+      return res.status(404).json({ error: "El correo de recuperación no está registrado." });
     }
 
+    const user = rows[0];
+
+    // Verificar si ya existe una contraseña temporal activa
+    if (isTemporaryPasswordValid(user.id_usuario)) {
+      return res.status(400).json({
+        error: "Ya se ha enviado una contraseña temporal. Espera a que expire (10 minutos).",
+      });
+    }
+
+    // Generar y guardar contraseña temporal
+    const tempPassword = generateTemporaryPassword();
+    await saveTemporaryPassword(user.id_usuario, tempPassword);
+
+    // Enviar correo
+    const sent = await sendRecoveryEmail(correo_recuperacion, tempPassword);
+    if (!sent) return res.status(500).json({ error: "No se pudo enviar el correo." });
+
     return res.status(200).json({
-      message: "Contraseña temporal generada y enviada correctamente al correo (válida por 10 minutos).",
+      message: "Contraseña temporal enviada correctamente al correo de recuperación (válida 10 minutos).",
     });
   } catch (err) {
     console.error("Error en /api/recover-password:", err);
     return res.status(500).json({ error: "Error interno del servidor" });
   }
 });
+
 
 // ----------------------------------------------------------------
 // CONEXIÓN A MYSQL (XAMPP)

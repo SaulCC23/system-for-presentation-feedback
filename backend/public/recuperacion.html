@@ -42,7 +42,7 @@
         const response = await fetch("/api/recover-password", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email }),
+          body: JSON.stringify({ correo_recuperacion: email }), // ✅ campo correcto
         });
 
         const data = await response.json();
