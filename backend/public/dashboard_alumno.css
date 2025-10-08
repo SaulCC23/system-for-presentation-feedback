@@ -1,0 +1,126 @@
+body {
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  background-color: #e6f7ff;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 100vh; 
+}
+
+.container {
+  background: #ffffff;
+  border-radius: 15px; 
+  box-shadow: 0 8px 30px rgba(0,0,0,0.15); 
+  padding: 40px;
+  width: 350px;
+  max-width: 90%;
+  text-align: center;
+}
+
+h1 {
+  font-size: 24px;
+  margin-bottom: 30px;
+  color: #1e88e5; 
+  font-weight: 700;
+}
+
+/* Caja de input de sesión */
+.session-box {
+  border: 2px solid transparent;
+  border-radius: 12px;
+  padding: 20px;
+  margin-bottom: 25px;
+  background: #fff;
+  background-clip: padding-box;
+  position: relative;
+  text-align: left;
+}
+
+/* Borde degradado: de azul a verde para un look más "alumno" */
+.session-box::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 12px;
+  padding: 3px;
+  background: linear-gradient(90deg,  #4facfe, #f093fb);
+  -webkit-mask: 
+    linear-gradient(#fff 0 0) content-box, 
+    linear-gradient(#fff 0 0);
+  -webkit-mask-composite: destination-out;
+  mask-composite: exclude;
+  /* CORRECCIÓN CLAVE: Aseguramos que este borde esté por debajo del contenido (input) */
+  z-index: 1; 
+}
+
+/* El contenido (párrafos, input) dentro de session-box debe tener un z-index más alto */
+.session-box * {
+    position: relative;
+    z-index: 2; /* Mayor que el pseudo-elemento ::before */
+}
+
+.session-box p {
+  margin: 0;
+  font-size: 16px;
+  color: #555;
+  font-weight: 500;
+}
+
+/* Estilo para el input de texto dentro de la caja de sesión */
+.session-box input { 
+    width: 100%; 
+    padding: 0.8rem; 
+    font-size: 1.2rem; 
+    margin-top: 1rem; 
+    border-radius: 8px; 
+    border: 2px solid #ccc; 
+    box-sizing: border-box; /* Muy importante para el padding y el width */
+    text-align: center; /* Centramos el código de sesión */
+    font-weight: bold;
+    color: #1e88e5;
+}
+
+.session-box input:focus {
+    border-color:  #f093fb;
+    outline: none;
+    box-shadow: 0 0 5px rgba(112, 13, 105, 0.5);
+}
+
+
+/* Separador horizontal */
+hr {
+  margin: 30px 0;
+  border: none;
+  border-top: 1px solid #cceeff; 
+}
+
+/* Botón principal (UNIRME A LA SESIÓN) */
+.btn {
+  display: block;
+  width: 90%;
+  margin: 0 auto; 
+  padding: 15px;
+  border: none;
+  border-radius: 10px;
+  color: #fff;
+  font-weight: bold;
+  cursor: pointer;
+  background: linear-gradient(45deg,  #4facfe, #f093fb); 
+  background-size: 200% auto;
+  transition: all 0.3s ease;
+}
+
+.btn:hover {
+  background-position: right center; 
+  transform: translateY(-3px); 
+  box-shadow: 0 8px 15px rgba(30, 136, 229, 0.4);
+}
+
+.btn:disabled {
+  background: #ccc;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}

@@ -179,6 +179,40 @@ app.post("/api/register", async (req, res) => {
 });
 
 // ----------------------------------------------------------------
+// CAMBIO DE CONTRASEÑA (Contraseña temporal -> nueva contraseña)
+// ----------------------------------------------------------------
+app.post("/api/change-password", async (req, res) => {
+  const { correo, newPassword } = req.body;
+
+  if (!correo || !newPassword) {
+    return res.status(400).json({ error: "Correo y nueva contraseña son requeridos." });
+  }
+
+  try {
+    // Buscar usuario por correo
+    const [rows] = await db.query("SELECT * FROM usuarios WHERE correo = ?", [correo]);
+    if (rows.length === 0) {
+      return res.status(404).json({ error: "Usuario no encontrado." });
+    }
+
+    const user = rows[0];
+
+    // Hashear nueva contraseña
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+    // Actualizar en base de datos
+    await db.query("UPDATE usuarios SET contrasena = ? WHERE id_usuario = ?", [hashedPassword, user.id_usuario]);
+
+    console.log(`🔑 Contraseña actualizada para: ${correo}`);
+    res.status(200).json({ message: "Contraseña modificada correctamente." });
+  } catch (err) {
+    console.error("Error en /api/change-password:", err);
+    res.status(500).json({ error: "Error interno del servidor." });
+  }
+});
+
+
+// ----------------------------------------------------------------
 // RUTAS DE SESIONES Y CHAT
 // ----------------------------------------------------------------
 const chatHistory = {}; // { codigo_sesion: [{ nombre, mensaje, hora, id }] }
@@ -236,6 +270,8 @@ app.get("/api/generate-pdf", (req, res) => {
 
   doc.end();
 });
+
+
 
 // ----------------------------------------------------------------
 // SOCKET.IO (Chat + WebRTC + control invitados)

@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Modificar Contraseña</title>
+  <link rel="stylesheet" href="recuperacion.css"> 
+  <style>
+    .password-wrapper {
+      position: relative;
+      display: flex;
+      align-items: center;
+      margin-bottom: 20px;
+    }
+    .password-wrapper input {
+      width: 100%;
+      padding: 12px 55px 12px 15px;
+      border: 2px solid #ccc;
+      border-radius: 8px;
+      outline: none;
+      font-size: 14px;
+      box-sizing: border-box;
+    }
+    .toggle-password {
+      position: absolute;
+      right: 15px;
+      cursor: pointer;
+      user-select: none;
+      font-size: 14px;
+      color: #666;
+      z-index: 10;
+    }
+    .password-wrapper input:focus {
+        border-color: #4facfe;
+        box-shadow: 0 0 8px rgba(79, 172, 254, 0.6);
+    }
+    .message {
+        margin-top: 20px;
+        font-weight: bold;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>MODIFICAR CONTRASEÑA</h1>
+    <p>Ingresa y confirma tu nueva contraseña para el usuario:</p>
+    <p id="user-info" style="font-weight: bold; color: #1a2a6c;"></p>
+    <p>Debe tener mínimo 8 caracteres, 1 mayúscula y 1 número</p>
+
+    <form id="changePasswordForm" class="form">
+      <div class="password-wrapper">
+        <input id="newPassword" type="password" placeholder="Nueva Contraseña *" required>
+        <span id="toggleNewPassword" class="toggle-password">ver</span>
+      </div>
+
+      <div class="password-wrapper">
+        <input id="confirmNewPassword" type="password" placeholder="Confirmar Nueva Contraseña *" required>
+        <span id="toggleConfirmNewPassword" class="toggle-password">ver</span>
+      </div>
+      
+      <button type="submit" class="btn">GUARDAR NUEVA CONTRASEÑA</button>
+    </form>
+
+    <p id="message" class="message"></p>
+
+    <a href="#" id="backLink" class="back-link">Regresar</a>
+  </div>
+
+  <script>
+    const passwordRegex = /^(?=.*[A-Z])(?=.*\d).{8,}$/;
+    const API_URL = "http://localhost:3001/api/change-password";
+
+    const form = document.getElementById("changePasswordForm");
+    const message = document.getElementById("message");
+    const newPasswordInput = document.getElementById('newPassword');
+    const confirmNewPasswordInput = document.getElementById('confirmNewPassword');
+    const userInfo = document.getElementById('user-info');
+    const backLink = document.getElementById('backLink');
+
+    // ============ 🔒 VERIFICAR SI ESTÁ LOGGEADO ============
+    const user = JSON.parse(localStorage.getItem('user'));
+    if (!user || !user.correo || !user.rol) {
+      alert("Debes iniciar sesión para acceder a esta página.");
+      window.location.href = "index.html";
+    } else {
+      userInfo.textContent = user.correo;
+    }
+
+    // ============ 📍 DETERMINAR PÁGINA DE ORIGEN ============
+    // Guarda la página anterior antes de entrar aquí (en tus otros dashboards)
+    const previousPage = localStorage.getItem("previousPage") || (user.rol === "maestro" ? "dashboard_maestro.html" : "dashboard_alumno.html");
+    backLink.href = previousPage;
+
+    // ============ 👁 FUNCIONALIDAD VER CONTRASEÑA ============
+    function setupPasswordToggle(inputId, toggleId) {
+      const input = document.getElementById(inputId);
+      const toggle = document.getElementById(toggleId);
+
+      toggle.addEventListener('mousedown', (e) => {
+        e.preventDefault();
+        input.type = 'text';
+        toggle.textContent = 'ocultar';
+      });
+      toggle.addEventListener('mouseup', () => {
+        input.type = 'password';
+        toggle.textContent = 'ver';
+      });
+      toggle.addEventListener('mouseleave', () => {
+        input.type = 'password';
+        toggle.textContent = 'ver';
+      });
+    }
+
+    setupPasswordToggle('newPassword', 'toggleNewPassword');
+    setupPasswordToggle('confirmNewPassword', 'toggleConfirmNewPassword');
+
+    // ============ 💾 CAMBIAR CONTRASEÑA ============
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+
+      const newPassword = newPasswordInput.value.trim();
+      const confirmNewPassword = confirmNewPasswordInput.value.trim();
+      let errores = [];
+
+      if (!passwordRegex.test(newPassword)) {
+        errores.push("Debe tener mínimo 8 caracteres, una mayúscula y un número.");
+      }
+      if (newPassword !== confirmNewPassword) {
+        errores.push("Las contraseñas no coinciden.");
+      }
+
+      if (errores.length > 0) {
+        message.textContent = errores.join(" ");
+        message.style.color = "red";
+        return;
+      }
+
+      const submitBtn = form.querySelector('.btn');
+      submitBtn.disabled = true;
+      submitBtn.textContent = "Guardando...";
+
+      try {
+        const response = await fetch(API_URL, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ 
+            correo: user.correo, 
+            newPassword 
+          }),
+        });
+
+        const data = await response.json();
+
+        if (response.ok) {
+          message.textContent = "Contraseña modificada exitosamente. Redirigiendo...";
+          message.style.color = "green";
+
+          setTimeout(() => {
+            window.location.href = previousPage; // 🔁 Regresa al lugar de origen
+          }, 2000);
+        } else {
+          message.textContent = data.error || "Ocurrió un error al modificar la contraseña.";
+          message.style.color = "red";
+        }
+      } catch (err) {
+        console.error(err);
+        message.textContent = "Error de conexión con el servidor.";
+        message.style.color = "red";
+      } finally {
+        submitBtn.disabled = false;
+        submitBtn.textContent = "GUARDAR NUEVA CONTRASEÑA";
+        newPasswordInput.value = '';
+        confirmNewPasswordInput.value = '';
+      }
+    });
+
+    // 🧭 Guarda la última página visitada desde donde vino el usuario
+    document.addEventListener("DOMContentLoaded", () => {
+      localStorage.setItem("previousPage", document.referrer || previousPage);
+    });
+  </script>
+</body>
+</html>

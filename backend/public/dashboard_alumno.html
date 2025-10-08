@@ -4,25 +4,70 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Modo Alumno</title>
-  <link rel="stylesheet" href="dashboard_profesor.css">
+  <link rel="stylesheet" href="dashboard_alumno.css"> 
   <style>
-    .session-box input { width: 100%; padding: 0.8rem; font-size: 1rem; margin-top: 0.5rem; border-radius: 5px; border: 1px solid #ccc; }
+    /* Estilos para el contenedor de botones inferiores */
+    .footer-buttons {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-top: 2rem;
+    }
+
+    /* Estilos generales de los botones grandes, ahora en el CSS principal */
     .btn { padding: 0.8rem 1.2rem; margin-top: 1rem; margin-bottom: 20px; cursor: pointer; border: none; border-radius: 8px; font-weight: 600; }
-    .logout-btn { background: #000; color: #fff; padding: 0.8rem 1.2rem; border: none; border-radius: 50px; cursor: pointer; font-size: 1rem; font-weight: 600; margin-top: 2rem; transition: opacity 0.3s; }
+    
+    /* Estilo base para los botones de la parte inferior */
+    .footer-btn { 
+      padding: 0.8rem 1.2rem; 
+      border: none; 
+      border-radius: 50px; 
+      cursor: pointer; 
+      font-size: 1rem; 
+      font-weight: 600; 
+      transition: background-color 0.3s, color 0.3s, transform 0.2s;
+      flex: 1; /* Para que ocupen espacio dentro del flexbox */
+      margin: 0 5px; /* Pequeño margen entre ellos */
+    }
+
+    /* Estilo para el botón de Cerrar Sesión (similar al original) */
+    #logout-btn { 
+      background:  #000;;
+      color: #fff; 
+    }
+    #logout-btn:hover {
+      background: #521a4b; 
+      transform: translateY(-2px);
+    }
+    
+    /* Nuevo estilo para el botón de Modificar Contraseña */
+    #change-password-btn { 
+      background: #007bff; /* Azul para acción positiva */
+      color: #fff;
+    }
+    #change-password-btn:hover {
+      background: #0056b3; 
+      transform: translateY(-2px);
+    }
   </style>
 </head>
 <body>
   <div class="container">
     <h1>MODO ALUMNO</h1>
 
-    <div>
-      <p>Introduce el código de sesión del profesor:</p>
-      <input type="text" id="sessionCodeInput" class="session-box" placeholder="Ej: 123456" maxlength="6" />
+    <div class="session-box">
+      <p>Introduce el código de sesión del profesor para unirte:</p>
+      <input type="text" id="sessionCodeInput" placeholder="Ej: 123456" maxlength="6" /> 
     </div>
 
-    <button id="join-btn" class="btn centrar" >UNIRME A LA SESIÓN</button>
+    <button id="join-btn" class="btn">UNIRME A LA SESIÓN</button>
     <hr>
-    <button id="logout-btn" class="logout-btn centrar">Cerrar Sesión</button>
+    
+    <div class="footer-buttons">
+      <button id="change-password-btn" class="footer-btn">Modificar Contraseña</button>
+      
+      <button id="logout-btn" class="footer-btn">Cerrar Sesión</button>
+    </div>
   </div>
 
 <script>
@@ -36,6 +81,8 @@
 
   const joinBtn = document.getElementById("join-btn");
   const sessionCodeInput = document.getElementById("sessionCodeInput");
+  const logoutBtn = document.getElementById("logout-btn");
+  const changePasswordBtn = document.getElementById("change-password-btn");
 
 
   joinBtn.addEventListener("click", async () => {
@@ -70,7 +117,15 @@
     }
   });
 
-  document.getElementById("logout-btn").addEventListener("click", () => {
+  // Evento para el botón de Modificar Contraseña
+  changePasswordBtn.addEventListener("click", () => {
+    // Redirige a la página para cambiar la contraseña
+    window.location.href = "cambiar_contraseña.html";
+  });
+
+
+  // Evento para el botón de Cerrar Sesión
+  logoutBtn.addEventListener("click", () => {
     localStorage.removeItem("user");
     window.location.href = "index.html";
   });
