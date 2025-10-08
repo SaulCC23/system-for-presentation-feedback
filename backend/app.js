@@ -14,21 +14,6 @@ const PDFDocument = require("pdfkit");
 const fs = require("fs");
 
 // ----------------------------------------------------------------
-// INTEGRACIÓN DEL SERVICIO DE SESIONES
-// ----------------------------------------------------------------
-const InMemorySessionRepository = require("./InMemorySessionRepository");
-const SessionService = require("./SessionService");
-
-const sessionRepo = new InMemorySessionRepository();
-const sessionService = new SessionService(sessionRepo);
-
-// ----------------------------------------------------------------
-// INTEGRACIÓN DEL SERVICIO DE RECUPERACIÓN DE CONTRASEÑA
-// ----------------------------------------------------------------
-const { recoverPassword } = require("./passwordRecoveryController");
-
-
-// ----------------------------------------------------------------
 // CONFIGURACIÓN DEL SERVIDOR EXPRESS + SOCKET.IO
 // ----------------------------------------------------------------
 const app = express();
@@ -48,6 +33,51 @@ app.use(express.static(path.join(__dirname, "public")));
 app.use(express.static(__dirname)); // raíz opcional
 
 // ----------------------------------------------------------------
+// INTEGRACIÓN DEL SERVICIO DE SESIONES
+// ----------------------------------------------------------------
+const InMemorySessionRepository = require("./InMemorySessionRepository");
+const SessionService = require("./SessionService");
+
+const sessionRepo = new InMemorySessionRepository();
+const sessionService = new SessionService(sessionRepo);
+
+// ----------------------------------------------------------------
+// INTEGRACIÓN DEL SERVICIO DE RECUPERACIÓN DE CONTRASEÑA
+// ----------------------------------------------------------------
+const {
+  generateTemporaryPassword,
+  sendRecoveryEmail,
+  saveTemporaryPassword,
+} = require("./passwordRecoveryService");
+
+// Endpoint POST /recover-password
+app.post("/api/recover-password", async (req, res) => {
+  const { email } = req.body || {};
+
+  if (!email) {
+    return res.status(400).json({ error: "El correo electrónico es requerido." });
+  }
+
+  try {
+    const tempPassword = generateTemporaryPassword();
+    saveTemporaryPassword(email, tempPassword);
+
+    const sent = await sendRecoveryEmail(email, tempPassword);
+
+    if (!sent) {
+      return res.status(500).json({ error: "No se pudo enviar el correo." });
+    }
+
+    return res.status(200).json({
+      message: "Contraseña temporal generada y enviada correctamente al correo (válida por 10 minutos).",
+    });
+  } catch (err) {
+    console.error("Error en /api/recover-password:", err);
+    return res.status(500).json({ error: "Error interno del servidor" });
+  }
+});
+
+// ----------------------------------------------------------------
 // CONEXIÓN A MYSQL (XAMPP)
 // ----------------------------------------------------------------
 const db = mysql.createPool({
@@ -60,7 +90,6 @@ const db = mysql.createPool({
 // ----------------------------------------------------------------
 // LOGIN Y REGISTRO DE USUARIOS
 // ----------------------------------------------------------------
-
 app.post("/api/login", async (req, res) => {
   const { correo, password } = req.body;
   if (!correo || !password) {
@@ -128,11 +157,6 @@ app.post("/api/register", async (req, res) => {
     res.status(500).json({ message: "Error interno del servidor" });
   }
 });
-
-
-/* ENPOINT DE RECUPERACIÓN DE CONTRASEÑA */
-app.post("/api/recover-password", recoverPassword);
-
 
 // ----------------------------------------------------------------
 // RUTAS DE SESIONES Y CHAT
@@ -207,7 +231,6 @@ io.on("connection", (socket) => {
     socket.join(codigo);
     socket.data.roomCode = codigo;
 
-    // Si no se pasa rol, asumimos invitado
     socket.data.rol = rol || "invitado";
     socket.data.nombre = nombre || "Invitado";
 
@@ -223,7 +246,6 @@ io.on("connection", (socket) => {
   socket.on("nuevo-mensaje", ({ codigo, nombre, mensaje }) => {
     if (!sessionService.isCodeInUse(codigo) || !chatHistory[codigo]) return;
 
-    // Bloquear invitados
     if (socket.data.rol === "invitado") {
       socket.emit("mensaje-error", { message: "Invitados no pueden enviar mensajes." });
       return;

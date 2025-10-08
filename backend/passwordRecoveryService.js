@@ -1,12 +1,12 @@
-import nodemailer from "nodemailer";
-import dotenv from "dotenv";
-dotenv.config();
+// passwordRecoveryService.js
+const nodemailer = require("nodemailer");
+require("dotenv").config();
 
 // Almacenamiento temporal en memoria (clave = email)
 const temporaryPasswords = new Map();
 
-
-export function generateTemporaryPassword() {
+// Genera una contraseña temporal de 8 caracteres con mayúsculas, minúsculas y números
+function generateTemporaryPassword() {
   const uppercase = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
   const lowercase = "abcdefghijklmnopqrstuvwxyz";
   const digits = "0123456789";
@@ -21,21 +21,22 @@ export function generateTemporaryPassword() {
     password += allChars[Math.floor(Math.random() * allChars.length)];
   }
 
+  // Mezcla los caracteres
   return password
     .split("")
     .sort(() => 0.5 - Math.random())
     .join("");
 }
 
-/* Guarda la contraseña temporal para un usuario (válida 10 min) */
-export function saveTemporaryPassword(email, password) {
+// Guarda la contraseña temporal para un usuario (válida 10 minutos)
+function saveTemporaryPassword(email, password) {
   const expiresAt = Date.now() + 10 * 60 * 1000; // 10 minutos
   temporaryPasswords.set(email, { password, expiresAt });
   console.log(`🕒 Contraseña temporal válida hasta: ${new Date(expiresAt).toLocaleTimeString()}`);
 }
 
-/* Verifica si la contraseña temporal sigue siendo válida*/
-export function isTemporaryPasswordValid(email, password) {
+// Verifica si la contraseña temporal sigue siendo válida
+function isTemporaryPasswordValid(email, password) {
   const entry = temporaryPasswords.get(email);
   if (!entry) return false;
 
@@ -47,8 +48,8 @@ export function isTemporaryPasswordValid(email, password) {
   return stillValid;
 }
 
-/* Envía la contraseña temporal al correo del usuario*/
-export async function sendRecoveryEmail(email, temporaryPassword) {
+// Envía la contraseña temporal al correo del usuario
+async function sendRecoveryEmail(email, temporaryPassword) {
   try {
     const transporter = nodemailer.createTransport({
       host: process.env.SMTP_HOST,
@@ -82,5 +83,10 @@ export async function sendRecoveryEmail(email, temporaryPassword) {
   }
 }
 
-
-
+// Exportamos todas las funciones en CommonJS
+module.exports = {
+  generateTemporaryPassword,
+  saveTemporaryPassword,
+  isTemporaryPasswordValid,
+  sendRecoveryEmail,
+};

@@ -9,16 +9,57 @@
 <body>
   <div class="container">
     <h1>¿OLVIDASTE TU CONTRASEÑA?</h1>
-    <p>Ingresa tu correo de recuperación para recibir un enlace de reinicio.</p>
+    <p>Ingresa tu correo de recuperación para recibir una contraseña temporal.</p>
 
-    <form class="form">
+    <form id="recoverForm" class="form">
       <div class="input-group">
-        <input type="email" placeholder="Correo de recuperación" required>
+        <input type="email" id="emailInput" placeholder="Correo de recuperación" required>
       </div>
-      <button type="submit" class="btn">ENVIAR ENLACE DE REINICIO</button>
+      <button type="submit" class="btn">ENVIAR CONTRASEÑA TEMPORAL</button>
     </form>
+
+    <p id="message" class="message"></p>
 
     <a href="index.html" class="back-link">Regresar a inicio de sesión</a>
   </div>
+
+  <script>
+    const form = document.getElementById("recoverForm");
+    const message = document.getElementById("message");
+
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+
+      const email = document.getElementById("emailInput").value.trim();
+
+      if (!email) {
+        message.textContent = "Por favor, ingresa un correo válido.";
+        message.style.color = "red";
+        return;
+      }
+
+      try {
+        const response = await fetch("/api/recover-password", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email }),
+        });
+
+        const data = await response.json();
+
+        if (response.ok) {
+          message.textContent = data.message;
+          message.style.color = "green";
+        } else {
+          message.textContent = data.error || "Ocurrió un error al enviar el correo.";
+          message.style.color = "red";
+        }
+      } catch (err) {
+        console.error(err);
+        message.textContent = "Error de conexión con el servidor.";
+        message.style.color = "red";
+      }
+    });
+  </script>
 </body>
 </html>
